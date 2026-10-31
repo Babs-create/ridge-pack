@@ -1,0 +1,1930 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ridge Pack</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IM+Fell+English+SC&family=Alegreya+Sans:wght@400;500;700&display=swap">
+<style>
+/* Layout: full-bleed canvas world; HUD panels pinned to corners like a field guide's margin notes. */
+:root{
+  color-scheme: dark;
+  --ground:#141a14;
+  --bark:rgba(22,24,19,.84);
+  --bark-solid:#1b1d18;
+  --edge:rgba(214,196,150,.24);
+  --bone:#efe6d2;
+  --dim:#aca38d;
+  --blood:#c0392b;
+  --amber:#d9982c;
+  --frost:#a7bccb;
+  --blaze:#e2621f;
+  --moss:#8aa457;
+  --display:'IM Fell English SC','Iowan Old Style',Georgia,serif;
+  --body:'Alegreya Sans','Gill Sans','Trebuchet MS',sans-serif;
+}
+[hidden]{display:none!important}
+html,body{height:100%;margin:0;overflow:hidden;background:var(--ground);color:var(--bone);font-family:var(--body);font-size:15px;-webkit-user-select:none;user-select:none;touch-action:none}
+canvas#game{position:fixed;inset:0;width:100%;height:100%;display:block;background:var(--ground)}
+button{font-family:var(--body);font-size:14px;color:var(--bone);background:rgba(239,230,210,.08);border:1px solid var(--edge);border-radius:4px;padding:7px 12px;cursor:pointer}
+button:hover:not(:disabled){background:rgba(239,230,210,.16)}
+button:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+button:disabled{opacity:.42;cursor:not-allowed}
+button.primary{background:var(--amber);color:#1b1408;border-color:var(--amber);font-weight:700}
+button.primary:hover:not(:disabled){background:#e8ab45}
+kbd{font-family:var(--body);font-weight:700;font-size:12px;border:1px solid var(--edge);border-bottom-width:2px;border-radius:3px;padding:1px 6px;background:rgba(239,230,210,.06);color:var(--bone)}
+.panel{background:var(--bark);border:1px solid var(--edge);border-radius:6px;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
+.label{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim)}
+
+/* HUD */
+#stats{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:calc(10px + env(safe-area-inset-left,0px));width:236px;padding:10px 12px;display:flex;flex-direction:column;gap:7px}
+.bar{display:grid;grid-template-columns:62px 1fr 28px;align-items:center;gap:8px}
+.bar .track{height:7px;border-radius:4px;background:rgba(239,230,210,.1);overflow:hidden}
+.bar .fill{height:100%;width:100%;transform-origin:left center;border-radius:4px}
+.bar .num{font-variant-numeric:tabular-nums;text-align:right;font-size:13px;color:var(--bone)}
+#hpFill{background:var(--blood)} #hgFill{background:var(--amber)} #stFill{background:var(--frost)}
+.meta{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;font-size:13px;color:var(--dim)}
+.meta b{color:var(--bone);font-weight:500}
+.chip{font-size:11px;letter-spacing:.08em;text-transform:uppercase;padding:2px 7px;border-radius:10px;border:1px solid var(--edge)}
+.chip.hide{color:var(--moss);border-color:rgba(138,164,87,.5)}
+.chip.carry{color:#e7a49a;border-color:rgba(192,57,43,.5)}
+#goal{font-size:13px;line-height:1.35;color:var(--bone);border-top:1px solid var(--edge);padding-top:7px;text-wrap:pretty}
+#goal .label{display:block;margin-bottom:2px}
+
+#side{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));right:calc(10px + env(safe-area-inset-right,0px));width:172px;padding:10px;display:flex;flex-direction:column;gap:8px}
+#mini{width:150px;height:150px;border-radius:4px;display:block;align-self:center;background:#0d110f}
+#denstats{margin:0;display:grid;grid-template-columns:auto 1fr;gap:3px 10px;font-size:13px}
+#denstats dt{color:var(--dim)} #denstats dd{margin:0;text-align:right;font-variant-numeric:tabular-nums}
+.sidebtns{display:flex;gap:6px}
+.sidebtns button{flex:1;padding:5px 0;font-size:12px}
+
+#hint{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(18px + env(safe-area-inset-bottom,0px));padding:7px 14px;font-size:14px;white-space:nowrap;pointer-events:none}
+#hint:empty{display:none}
+#toasts{position:fixed;left:50%;transform:translateX(-50%);top:calc(12px + env(safe-area-inset-top,0px));display:flex;flex-direction:column;align-items:center;gap:6px;pointer-events:none;width:min(440px,calc(100vw - 520px))}
+.toast{padding:7px 14px;font-size:14px;line-height:1.3;text-align:center;animation:tin .25s ease-out;max-width:100%}
+.toast.bad{border-color:rgba(192,57,43,.7);color:#f2c3bb}
+.toast.good{border-color:rgba(138,164,87,.7)}
+@keyframes tin{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+
+#denpanel{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(64px + env(safe-area-inset-bottom,0px));width:min(380px,calc(100vw - 32px));padding:12px 14px;display:flex;flex-direction:column;gap:9px}
+#denpanel h3{margin:0;font-family:var(--display);font-weight:400;font-size:22px;line-height:1;display:flex;justify-content:space-between;align-items:baseline}
+#denpanel h3 span{font-family:var(--body);font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}
+.store{display:grid;grid-template-columns:1fr auto;gap:4px 10px;align-items:center;font-size:13px}
+.store .track{grid-column:1/-1;height:6px;border-radius:3px;background:rgba(239,230,210,.1);overflow:hidden}
+.store .fill{height:100%;background:#a3473a;transform-origin:left center}
+#pupList{font-size:13px;color:var(--dim);line-height:1.4}
+.denbtns{display:flex;flex-wrap:wrap;gap:6px}
+.denbtns button{flex:1 1 auto}
+
+#touch{position:fixed;inset:auto 0 0 0;height:0}
+#stick{position:fixed;left:calc(20px + env(safe-area-inset-left,0px));bottom:calc(24px + env(safe-area-inset-bottom,0px));width:128px;height:128px;border-radius:50%;border:1px solid var(--edge);background:rgba(22,24,19,.45);touch-action:none}
+#knob{position:absolute;left:50%;top:50%;width:54px;height:54px;margin:-27px 0 0 -27px;border-radius:50%;background:rgba(239,230,210,.25);border:1px solid var(--edge)}
+.tbtns{position:fixed;right:calc(16px + env(safe-area-inset-right,0px));bottom:calc(20px + env(safe-area-inset-bottom,0px));display:grid;grid-template-columns:repeat(3,58px);gap:8px;justify-items:center}
+.tbtns button{width:58px;height:58px;border-radius:50%;padding:0;font-size:13px;font-weight:700;background:rgba(22,24,19,.6);touch-action:none}
+.tbtns button.big{grid-column:3;grid-row:1/3;width:72px;height:72px;align-self:center;background:rgba(192,57,43,.55)}
+.tbtns button.on{background:rgba(167,188,203,.45)}
+
+/* Screens */
+.screen{position:fixed;inset:0;display:flex;align-items:center;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));background:linear-gradient(90deg,rgba(12,15,12,.92) 0%,rgba(12,15,12,.72) 46%,rgba(12,15,12,.15) 100%);overflow:auto}
+.screen .inner{max-width:520px;margin-left:clamp(0px,6vw,90px);padding-block:32px;display:flex;flex-direction:column;gap:16px}
+.screen h1{font-family:var(--display);font-weight:400;font-size:clamp(52px,9vw,96px);line-height:.9;margin:0;letter-spacing:.01em;text-wrap:balance}
+.screen h2{font-family:var(--display);font-weight:400;font-size:clamp(36px,6vw,58px);line-height:1;margin:0;text-wrap:balance}
+.screen p{margin:0;line-height:1.5;color:var(--dim);max-width:62ch}
+.screen p b{color:var(--bone);font-weight:500}
+.fieldnote{display:flex;flex-wrap:wrap;gap:4px 18px;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--amber)}
+.controls{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:14px;align-items:center;color:var(--dim)}
+.controls dt{white-space:nowrap}
+.controls dd{margin:0}
+.btnrow{display:flex;flex-wrap:wrap;gap:10px}
+.btnrow button{padding:10px 18px;font-size:15px}
+.statgrid{display:grid;grid-template-columns:repeat(4,auto);gap:4px 22px;justify-content:start}
+.statgrid div{display:flex;flex-direction:column}
+.statgrid strong{font-family:var(--display);font-weight:400;font-size:34px;line-height:1;font-variant-numeric:tabular-nums}
+
+#mapview{position:fixed;inset:0;background:rgba(10,12,10,.8);display:flex;align-items:center;justify-content:center;padding:16px}
+#mapbox{display:flex;flex-direction:column;gap:8px;max-width:100%}
+#mapbox header{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+#mapbox h3{margin:0;font-family:var(--display);font-weight:400;font-size:26px}
+#bigmap{border-radius:4px;border:1px solid var(--edge);max-width:100%;display:block}
+.legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--dim)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+
+.chip.sneak{color:var(--frost);border-color:rgba(167,188,203,.5)}
+#toasts{z-index:50}
+#pause,#over{z-index:40}
+body.inden #toasts{top:calc(12px + env(safe-area-inset-top,0px));bottom:auto}
+#denview{position:fixed;inset:0;z-index:30;background:#120d09;display:grid;grid-template-columns:minmax(0,1fr) 360px}
+#denCanvas{width:100%;height:100%;display:block;min-width:0;min-height:0;cursor:pointer}
+#denside{overflow-y:auto;padding:calc(14px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) calc(16px + env(safe-area-inset-bottom,0px)) 16px;display:flex;flex-direction:column;gap:14px;background:var(--bark-solid);border-left:1px solid var(--edge);min-height:0}
+#denside header{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+#denside h3{margin:0;font-family:var(--display);font-weight:400;font-size:30px;line-height:1}
+#denside h4{margin:0 0 6px;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--amber);font-weight:700}
+#denside p{margin:0 0 8px;font-size:13px;line-height:1.4;color:var(--dim)}
+#denside p b{color:var(--bone);font-weight:500}
+#denside section{border-top:1px solid var(--edge);padding-top:12px}
+.dstats{display:grid;grid-template-columns:1fr auto;gap:3px 12px;font-size:14px}
+.dstats span:nth-child(even){text-align:right;font-variant-numeric:tabular-nums}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+.chips button{padding:5px 10px;font-size:13px;border-radius:14px}
+.chips button[aria-pressed="true"]{background:rgba(217,152,44,.22);border-color:var(--amber);color:#f5d9a6}
+.grouplabel{font-size:12px;color:var(--dim);margin:0 0 4px}
+.digopts{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.digopts button{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;padding:8px 10px}
+.digopts button small{font-size:12px;color:var(--dim)}
+.drow{display:flex;gap:8px;flex-wrap:wrap}
+.drow button{flex:1}
+@media (max-width:760px){#denview{grid-template-columns:1fr;grid-template-rows:40vh minmax(0,1fr)}#denside{border-left:0;border-top:1px solid var(--edge);padding-top:14px}}
+@media (max-width:760px){
+  #stats{width:178px;padding:8px 10px;gap:5px}
+  .bar{grid-template-columns:48px 1fr 24px;gap:6px}
+  .bar .label{font-size:10px;letter-spacing:.06em}
+  #goal{font-size:12px}
+  #side{width:124px;padding:8px;gap:6px}
+  #mini{width:106px;height:106px}
+  #denstats{font-size:12px}
+  #toasts{top:auto;bottom:calc(240px + env(safe-area-inset-bottom,0px));width:calc(100vw - 32px)}
+  .toast{font-size:13px}
+}
+body.touch #hint{bottom:calc(230px + env(safe-area-inset-bottom,0px))}
+body.touch #denpanel{bottom:calc(272px + env(safe-area-inset-bottom,0px))}
+body.touch .kbonly{display:none}
+@media (prefers-reduced-motion:reduce){.toast{animation:none}}
+</style>
+</head>
+<body>
+<canvas id="game" aria-label="Wilderness map"></canvas>
+
+<div id="hud" hidden>
+  <div id="stats" class="panel">
+    <div class="bar"><span class="label">Health</span><div class="track"><div class="fill" id="hpFill"></div></div><span class="num" id="hpNum">100</span></div>
+    <div class="bar"><span class="label">Hunger</span><div class="track"><div class="fill" id="hgFill"></div></div><span class="num" id="hgNum">100</span></div>
+    <div class="bar"><span class="label">Stamina</span><div class="track"><div class="fill" id="stFill"></div></div><span class="num" id="stNum">100</span></div>
+    <div class="meta"><span><b id="dayNum">Day 1</b> · <span id="phase">Morning</span></span><span id="conceal" class="chip hide" hidden>Concealed</span><span id="sneakChip" class="chip sneak" hidden>Sneaking</span><span id="carryChip" class="chip carry" hidden>Carrying 1</span></div>
+    <div id="goal"><span class="label">Goal</span><span id="goalText"></span></div>
+  </div>
+
+  <div id="side" class="panel">
+    <canvas id="mini" width="150" height="150"></canvas>
+    <dl id="denstats">
+      <dt>Den</dt><dd id="dsDen">None</dd>
+      <dt>Stored</dt><dd id="dsFood">0</dd>
+      <dt>Pups</dt><dd id="dsPups">0</dd>
+      <dt>Pack</dt><dd id="dsPack">Just you</dd>
+    </dl>
+    <div class="sidebtns"><button id="btnMap" type="button">Map</button><button id="btnSound" type="button">Sound</button><button id="btnPause" type="button">Pause</button></div>
+  </div>
+
+  <div id="hint" class="panel"></div>
+  <div id="toasts" aria-live="polite"></div>
+
+  <div id="denpanel" class="panel" hidden>
+    <h3><span id="dpName">Burrow</span><span id="dpLevel">Level 1 of 4</span></h3>
+    <div class="store"><span>Meat stored</span><span id="dpFood">0 / 8</span><div class="track"><div class="fill" id="dpFill"></div></div></div>
+    <div id="pupList"></div>
+    <div class="denbtns">
+      <button id="btnEnter" class="primary" type="button">Go inside</button>
+      <button id="btnDenEat" type="button">Eat from store</button>
+    </div>
+  </div>
+
+  <div id="touch" hidden>
+    <div id="stick"><div id="knob"></div></div>
+    <div class="tbtns">
+      <button data-act="act" type="button">Act</button>
+      <button data-act="eat" type="button">Eat</button>
+      <button data-act="bite" class="big" type="button">Bite</button>
+      <button data-act="sprint" type="button">Run</button>
+      <button data-act="howl" type="button">Howl</button>
+      <button data-act="sneak" type="button">Sneak</button>
+    </div>
+  </div>
+</div>
+
+<div id="mapview" hidden>
+  <div id="mapbox">
+    <header><h3>Territory</h3><span class="label" id="mapInfo"></span></header>
+    <canvas id="bigmap"></canvas>
+    <div class="legend">
+      <span><i style="background:#2a5266"></i>Water</span>
+      <span><i style="background:#9e8f52"></i>Meadow</span>
+      <span><i style="background:#607a3a"></i>Grassland</span>
+      <span><i style="background:#8a4b2a"></i>Autumn woods</span>
+      <span><i style="background:#2a4021"></i>Deep woods</span>
+      <span><i style="background:#6e6a62"></i>Ridge rock</span>
+      <span><i style="background:#efe6d2"></i>You / den</span>
+      <span class="kbonly">Press <kbd>M</kbd> to close</span>
+    </div>
+    <div><button id="btnCloseMap" type="button">Close map</button></div>
+  </div>
+</div>
+
+<div id="denview" hidden>
+  <canvas id="denCanvas" aria-label="Underground den, tap a chamber to walk there"></canvas>
+  <aside id="denside"></aside>
+</div>
+
+<div id="title" class="screen">
+  <div class="inner">
+    <div class="fieldnote"><span>Range: Blue Ridge</span><span>Season: Late October</span><span id="seedNote"></span></div>
+    <h1>Ridge Pack</h1>
+    <p>You are a lone gray wolf in a wilderness <b>3 kilometers across</b>: more than half a million tiles of hollows, lakes, rivers and ridgelines, generated fresh for every pack. Sneak up on deer, dig a den, then go underground to carve out chambers and choose how it looks. Once your den is big and holds 10 meat, you can raise pups. Pups that survive three dawns join your pack and hunt beside you.</p>
+    <p>Black bears hold the woods and raid poorly guarded dens, but they warn before they charge and give up fast once you put distance or water between you. Hunters in blaze orange work the open grass by day. Stay in the trees and they will struggle to see you.</p>
+    <dl class="controls kbonly">
+      <dt><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></dt><dd>Move (arrow keys work too)</dd>
+      <dt><kbd>Shift</kbd></dt><dd>Run, uses stamina</dd>
+      <dt><kbd>C</kbd></dt><dd>Sneak: prey cannot see you and your first bite is an ambush</dd>
+      <dt><kbd>Space</kbd> / click</dt><dd>Bite</dd>
+      <dt><kbd>E</kbd></dt><dd>Pick up meat, store it, dig or enter your den</dd>
+      <dt><kbd>F</kbd></dt><dd>Eat</dd>
+      <dt><kbd>H</kbd></dt><dd>Howl to rally your pack</dd>
+      <dt><kbd>M</kbd> · <kbd>P</kbd> · scroll</dt><dd>Map · pause · zoom</dd>
+    </dl>
+    <div class="btnrow">
+      <button id="btnNew" class="primary" type="button">New world</button>
+      <button id="btnContinue" type="button" hidden>Continue</button>
+    </div>
+  </div>
+</div>
+
+<div id="over" class="screen" hidden>
+  <div class="inner">
+    <div class="fieldnote"><span id="overCause">Cause unknown</span></div>
+    <h2>The ridge goes quiet</h2>
+    <div class="statgrid">
+      <div><strong id="oDays">1</strong><span class="label">Days</span></div>
+      <div><strong id="oKills">0</strong><span class="label">Kills</span></div>
+      <div><strong id="oPups">0</strong><span class="label">Pups raised</span></div>
+      <div><strong id="oPack">1</strong><span class="label">Largest pack</span></div>
+    </div>
+    <p id="overNote"></p>
+    <div class="btnrow"><button id="btnAgain" class="primary" type="button">New world</button></div>
+  </div>
+</div>
+
+<div id="pause" class="screen" hidden>
+  <div class="inner">
+    <h2>Paused</h2>
+    <p>Your game saves on its own every few seconds in this browser.</p>
+    <div class="btnrow"><button id="btnResume" class="primary" type="button">Resume</button><button id="btnQuit" type="button">Back to title</button></div>
+  </div>
+</div>
+
+<script>
+(() => {
+'use strict';
+/* ---------- constants ---------- */
+const OLD_WORLD = 1500, TILE = 32, WORLD = 750, OFF = (OLD_WORLD - WORLD) / 2, CH = 16, CHPX = TILE * CH, NCH = Math.ceil(WORLD / CH), WPX = WORLD * TILE;
+const DAY_LEN = 240;
+const T = { DEEP:0, WATER:1, MUD:2, MEADOW:3, GRASS:4, FOREST:5, DENSE:6, ROCK:7, SNOW:8 };
+const PAL = [[30,60,82],[50,96,112],[104,92,62],[158,143,82],[96,122,58],[64,90,44],[42,64,33],[110,106,98],[220,224,226]];
+const DEN_LV = [
+  { name:'Burrow',    cap:8,  pups:0, cost:0 },
+  { name:'Den',       cap:12, pups:0, cost:5 },
+  { name:'Deep Den',  cap:16, pups:3, cost:8 },
+  { name:'Great Den', cap:20, pups:4, cost:14 },
+];
+const BIG_DEN = 2, LITTER_COST = 10;
+const CHAMBERS = {
+  main:    { name:'Main chamber',  desc:'' },
+  nursery: { name:'Nursery',       desc:'+2 room for pups' },
+  pantry:  { name:'Pantry',        desc:'+6 meat storage' },
+  nook:    { name:'Sleeping nook', desc:'Rest heals twice as fast' },
+  bolt:    { name:'Bolt-hole',     desc:'Bear raids steal half' },
+};
+const STYLE_OPTS = {
+  walls:    [['clay','Red clay'],['stone','Ridge stone'],['roots','Root-woven'],['loam','Sandy loam']],
+  bedding:  [['leaves','Autumn leaves'],['moss','Moss'],['needles','Pine needles'],['fur','Shed fur']],
+  entrance: [['hill','Hillside'],['boulder','Under a boulder'],['oak','Under an oak'],['log','Fallen log']],
+  decor:    [['bones','Bones'],['antler','Antler'],['feathers','Feathers'],['pinecones','Pinecones'],['glow','Glow mushrooms'],['flowers','Asters']],
+};
+function countCh(d, t) { return d.chambers.filter(c => c === t).length; }
+function hasCh(d, t) { return !!d && d.chambers.includes(t); }
+function denCap(d) { return DEN_LV[d.level].cap + 6 * countCh(d, 'pantry'); }
+function pupCap(d) { return DEN_LV[d.level].pups ? DEN_LV[d.level].pups + 2 * countCh(d, 'nursery') : 0; }
+function normDen(d) {
+  if (!d) return d;
+  d.style = Object.assign({ walls:'clay', bedding:'leaves', entrance:'hill', decor:['bones','flowers'] }, d.style || {});
+  if (!Array.isArray(d.style.decor)) d.style.decor = [];
+  if (!Array.isArray(d.chambers)) { d.chambers = ['main']; for (let i = 0; i < d.level; i++) d.chambers.push(['nursery','pantry','nook'][i]); }
+  return d;
+}
+const NAMES = ['Ash','Sedge','Birch','Flint','Juniper','Ember','Wren','Hollis','Tamarack','Moss','Slate','Rue','Bramble','Cinder','Laurel','Hickory','Shale','Thistle','Alder','Sumac','Fern','Kestrel','Rowan','Talus'];
+const COATS = ['#8d8a82','#7a7266','#a29a8a','#6a655e','#8b7d68','#9c9488','#77736b'];
+const MAX_PACK = 8, CARRY_CAP = 2;
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ---------- noise / terrain ---------- */
+let seed = 1;
+function hash2(x, y, s) {
+  let h = (Math.imul(x, 374761393) + Math.imul(y, 668265263) + Math.imul(s, 1442695041)) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  h ^= h >>> 16;
+  return (h >>> 0) / 4294967296;
+}
+function vnoise(x, y, s) {
+  const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi;
+  const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
+  const a = hash2(xi, yi, s), b = hash2(xi + 1, yi, s), c = hash2(xi, yi + 1, s), d = hash2(xi + 1, yi + 1, s);
+  return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+}
+function fbm(x, y, oct, s) {
+  let sum = 0, amp = 1, n = 0, f = 1;
+  for (let i = 0; i < oct; i++) { sum += vnoise(x * f, y * f, s + i * 101) * amp; n += amp; amp *= 0.5; f *= 2.03; }
+  return sum / n;
+}
+function terrainAt(tx, ty) {
+  if (tx < 0 || ty < 0 || tx >= WORLD || ty >= WORLD) return T.ROCK;
+  const edge = Math.min(tx, ty, WORLD - 1 - tx, WORLD - 1 - ty);
+  tx += OFF; ty += OFF;
+  let e = (fbm(tx / 170, ty / 170, 5, seed) - 0.5) * 1.6 + 0.5;
+  if (edge < 40) e += (40 - edge) / 40 * 0.6;
+  if (e < 0.30) return T.DEEP;
+  if (e < 0.34) return T.WATER;
+  if (e > 0.83) return T.SNOW;
+  if (e > 0.72) return T.ROCK;
+  const r = fbm(tx / 300 + 900, ty / 300 + 400, 4, seed + 13);
+  if (Math.abs(r - 0.5) < 0.007 && e < 0.66) return T.WATER;
+  if (e < 0.36) return T.MUD;
+  const m = (fbm(tx / 120 + 311, ty / 120 - 77, 4, seed + 7) - 0.5) * 1.6 + 0.5;
+  if (m > 0.62) return T.DENSE;
+  if (m > 0.5) return T.FOREST;
+  if (m < 0.39) return T.MEADOW;
+  return T.GRASS;
+}
+
+/* ---------- chunks ---------- */
+let chunks = new Map(), canvasCount = 0, frameNo = 0;
+function getChunk(cx, cy) {
+  const k = cy * NCH + cx;
+  let c = chunks.get(k);
+  if (!c) {
+    const data = new Uint8Array(CH * CH);
+    for (let j = 0; j < CH; j++) for (let i = 0; i < CH; i++) data[j * CH + i] = terrainAt(cx * CH + i, cy * CH + j);
+    c = { cx, cy, data, canvas: null, last: 0 };
+    chunks.set(k, c);
+  }
+  return c;
+}
+function tileT(tx, ty) {
+  if (tx < 0 || ty < 0 || tx >= WORLD || ty >= WORLD) return T.ROCK;
+  return getChunk(tx >> 4, ty >> 4).data[(ty & 15) * CH + (tx & 15)];
+}
+function tileAt(px, py) { return tileT(Math.floor(px / TILE), Math.floor(py / TILE)); }
+
+function rgb(c, k = 1) { return `rgb(${Math.min(255, c[0] * k) | 0},${Math.min(255, c[1] * k) | 0},${Math.min(255, c[2] * k) | 0})`; }
+const LEAF = [[184,69,42],[207,122,42],[201,164,58],[140,79,42],[93,122,52],[171,52,38]];
+const PINE = [[34,58,36],[44,74,44],[58,92,54]];
+
+function circle(g, x, y, r) { g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill(); }
+function ellipse(g, x, y, rx, ry, rot = 0) { g.beginPath(); g.ellipse(x, y, rx, ry, rot, 0, Math.PI * 2); g.fill(); }
+function star(g, x, y, r1, r2, n, rot) {
+  g.beginPath();
+  for (let i = 0; i < n * 2; i++) {
+    const r = i % 2 ? r2 : r1, a = rot + i * Math.PI / n;
+    i ? g.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r) : g.moveTo(x + Math.cos(a) * r, y + Math.sin(a) * r);
+  }
+  g.closePath(); g.fill();
+}
+function drawTree(g, x, y, r, h, pineBias) {
+  g.fillStyle = 'rgba(8,12,6,0.34)';
+  ellipse(g, x + 5, y + 6, r * 1.05, r * 0.85);
+  if (h < pineBias) {
+    for (let k = 0; k < 3; k++) { g.fillStyle = rgb(PINE[k]); star(g, x, y - k * 1.5, r * (1 - k * 0.28), r * (1 - k * 0.28) * 0.6, 8, h * 6 + k * 0.2); }
+    g.fillStyle = 'rgba(90,60,40,0.9)'; circle(g, x, y - 4, 2);
+  } else {
+    const base = LEAF[Math.floor(hash2(x | 0, y | 0, seed + 41) * LEAF.length)];
+    g.fillStyle = rgb(base, 0.7); circle(g, x + 2, y + 2, r);
+    g.fillStyle = rgb(base, 0.9); circle(g, x, y, r * 0.9);
+    for (let k = 0; k < 5; k++) {
+      const a = k * 1.256 + h * 9;
+      g.fillStyle = rgb(base, 0.88 + ((k * 37) % 10) / 40);
+      circle(g, x + Math.cos(a) * r * 0.48, y + Math.sin(a) * r * 0.48, r * 0.46);
+    }
+    g.fillStyle = rgb(base, 1.18); circle(g, x - r * 0.3, y - r * 0.32, r * 0.34);
+  }
+}
+function decorate(g, t, tx, ty, px, py) {
+  const h = hash2(tx, ty, seed + 11), h2 = hash2(tx, ty, seed + 12), h3 = hash2(tx, ty, seed + 19);
+  const cx = px + 16 + (h2 - 0.5) * 14, cy = py + 16 + (h3 - 0.5) * 14;
+  switch (t) {
+    case T.GRASS:
+    case T.MEADOW: {
+      if (h < 0.55) {
+        g.strokeStyle = t === T.GRASS ? 'rgba(52,74,30,0.7)' : 'rgba(120,104,58,0.8)';
+        g.lineWidth = 1.4; g.beginPath();
+        for (let k = 0; k < 3; k++) { const ox = cx + (k - 1) * 3; g.moveTo(ox, cy + 3); g.lineTo(ox + (k - 1) * 1.5, cy - 4); }
+        g.stroke();
+      }
+      if (h > 0.9) {
+        g.fillStyle = t === T.GRASS ? '#d6b33a' : '#8f7bb8';
+        for (let k = 0; k < 4; k++) circle(g, cx + Math.cos(k * 1.7 + h * 20) * 5, cy + Math.sin(k * 1.7 + h * 20) * 5, 1.8);
+      }
+      if (t === T.GRASS && h > 0.975) drawTree(g, cx, cy, 13 + h2 * 4, h2, 0.2);
+      break;
+    }
+    case T.FOREST:
+      if (h < 0.44) drawTree(g, cx, cy, 13 + h2 * 8, h3, 0.32);
+      else if (h < 0.6) { g.fillStyle = 'rgba(176,96,40,0.55)'; for (let k = 0; k < 5; k++) circle(g, cx + (hash2(tx + k, ty, 3) - 0.5) * 22, cy + (hash2(tx, ty + k, 4) - 0.5) * 22, 1.6); }
+      break;
+    case T.DENSE:
+      if (h < 0.74) drawTree(g, cx, cy, 14 + h2 * 9, h3, 0.55);
+      break;
+    case T.ROCK:
+      if (h < 0.4) {
+        const r = 6 + h2 * 9;
+        g.fillStyle = 'rgba(0,0,0,0.3)'; ellipse(g, cx + 3, cy + 4, r, r * 0.75);
+        g.fillStyle = '#7d7970'; star(g, cx, cy, r, r * 0.82, 4, h * 3);
+        g.fillStyle = '#9a958a'; star(g, cx - 2, cy - 2, r * 0.55, r * 0.45, 4, h * 3);
+      }
+      break;
+    case T.SNOW:
+      if (h < 0.08) { g.fillStyle = '#9a958a'; star(g, cx, cy, 6, 5, 4, h); }
+      break;
+    case T.MUD:
+      if (h < 0.5) { g.fillStyle = 'rgba(70,60,40,0.8)'; circle(g, cx, cy, 2.2); circle(g, cx + 6, cy + 3, 1.5); }
+      break;
+    case T.WATER:
+    case T.DEEP:
+      if (h < 0.14) { g.strokeStyle = 'rgba(200,225,235,0.22)'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(cx - 6, cy); g.quadraticCurveTo(cx, cy - 3, cx + 6, cy); g.stroke(); }
+      break;
+  }
+}
+function renderChunk(c) {
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = CHPX;
+  const g = cv.getContext('2d');
+  const ox = c.cx * CH, oy = c.cy * CH;
+  for (let j = 0; j < CH; j++) for (let i = 0; i < CH; i++) {
+    const t = c.data[j * CH + i];
+    g.fillStyle = rgb(PAL[t], 0.95 + hash2(ox + i, oy + j, seed + 3) * 0.1);
+    g.fillRect(i * TILE, j * TILE, TILE, TILE);
+  }
+  // soft blobs across tile edges (row-major in global coords so neighbours agree)
+  for (let j = -1; j <= CH; j++) for (let i = -1; i <= CH; i++) {
+    const tx = ox + i, ty = oy + j, t = tileT(tx, ty);
+    for (let n = 0; n < 2; n++) {
+      const h = hash2(tx * 3 + n, ty * 7 + n, seed + 5), h2 = hash2(tx + n * 11, ty * 5, seed + 6);
+      g.fillStyle = rgb(PAL[t], 0.95 + h2 * 0.1);
+      circle(g, i * TILE + 16 + (h - 0.5) * 34, j * TILE + 16 + (h2 - 0.5) * 34, 11 + h * 8);
+    }
+  }
+  for (let j = -1; j <= CH; j++) for (let i = -1; i <= CH; i++) {
+    const tx = ox + i, ty = oy + j;
+    decorate(g, tileT(tx, ty), tx, ty, i * TILE, j * TILE);
+  }
+  c.canvas = cv; canvasCount++;
+}
+function evictChunks() {
+  if (canvasCount <= 52) return;
+  const list = [];
+  for (const c of chunks.values()) if (c.canvas && c.last < frameNo) list.push(c);
+  list.sort((a, b) => a.last - b.last);
+  for (let i = 0; i < list.length && canvasCount > 44; i++) { list[i].canvas = null; canvasCount--; }
+}
+
+/* ---------- helpers ---------- */
+const rand = Math.random;
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+function lerpAng(a, b, t) { const d = ((b - a + Math.PI * 3) % (Math.PI * 2)) - Math.PI; return a + d * Math.min(1, t); }
+function canWalk(kind, t) {
+  if (t === T.ROCK || t === T.SNOW) return false;
+  if (kind === 'wolf') return true;
+  if (kind === 'hunter' || kind === 'rabbit') return t !== T.DEEP && t !== T.WATER;
+  return t !== T.DEEP;
+}
+function tileSpeed(t) { return t === T.DEEP ? 0.42 : t === T.WATER ? 0.58 : t === T.MUD ? 0.85 : t === T.DENSE ? 0.9 : 1; }
+function moveBody(e, vx, vy, dt, kind, probe = 10) {
+  let ok = true;
+  if (vx) { const nx = e.x + vx * dt; if (nx > 20 && nx < WPX - 20 && canWalk(kind, tileAt(nx + Math.sign(vx) * probe, e.y))) e.x = nx; else ok = false; }
+  if (vy) { const ny = e.y + vy * dt; if (ny > 20 && ny < WPX - 20 && canWalk(kind, tileAt(e.x, ny + Math.sign(vy) * probe))) e.y = ny; else ok = false; }
+  return ok;
+}
+function pickName(used) {
+  const free = NAMES.filter(n => !used.includes(n));
+  return (free.length ? free : NAMES)[Math.floor(rand() * (free.length || NAMES.length))];
+}
+function usedNames() { return S.pack.map(w => w.name).concat(S.den ? S.den.pups.map(p => p.name) : []); }
+function nightAmt(t) { if (t < 0.06) return 1 - t / 0.06; if (t < 0.55) return 0; if (t < 0.68) return (t - 0.55) / 0.13; return 1; }
+function phaseName(t) { return t < 0.06 ? 'Dawn' : t < 0.25 ? 'Morning' : t < 0.42 ? 'Midday' : t < 0.55 ? 'Afternoon' : t < 0.68 ? 'Dusk' : 'Night'; }
+function huntHours() { return S.dayT > 0.07 && S.dayT < 0.55; }
+
+/* ---------- audio ---------- */
+let AC = null, muted = false;
+function initAudio() { if (AC) return; try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { AC = null; } }
+function noise(dur, freq, vol, q = 1) {
+  if (!AC || muted) return;
+  try {
+    const n = AC.sampleRate * dur | 0, buf = AC.createBuffer(1, n, AC.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = (rand() * 2 - 1) * Math.pow(1 - i / n, 2);
+    const src = AC.createBufferSource(); src.buffer = buf;
+    const f = AC.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = q;
+    const gn = AC.createGain(); gn.gain.value = vol;
+    src.connect(f); f.connect(gn); gn.connect(AC.destination); src.start();
+  } catch (e) {}
+}
+function tone(f0, f1, dur, type, vol) {
+  if (!AC || muted) return;
+  try {
+    const o = AC.createOscillator(), gn = AC.createGain(), t0 = AC.currentTime;
+    o.type = type; o.frequency.setValueAtTime(f0, t0); o.frequency.exponentialRampToValueAtTime(f1, t0 + dur * 0.7);
+    gn.gain.setValueAtTime(0.0001, t0); gn.gain.exponentialRampToValueAtTime(vol, t0 + 0.08); gn.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    o.connect(gn); gn.connect(AC.destination); o.start(t0); o.stop(t0 + dur + 0.05);
+  } catch (e) {}
+}
+const sfx = {
+  bite: () => noise(0.07, 2200, 0.35, 2),
+  shot: (v = 1) => { noise(0.6, 700, 0.9 * v, 0.6); noise(0.15, 2500, 0.5 * v, 1); },
+  growl: () => tone(110, 62, 0.7, 'sawtooth', 0.09),
+  howl: () => { tone(330, 560, 1.6, 'sine', 0.14); setTimeout(() => tone(520, 420, 1.2, 'sine', 0.1), 900); },
+  eat: () => noise(0.12, 900, 0.25, 3),
+};
+
+/* ---------- state ---------- */
+let S = null;
+const R = { mode:'title', ents:[], meats:[], fx:[], texts:[], rings:[], time:0, spawnT:0, hudT:0, saveT:0, cam:{x:0,y:0}, zoom:1, shake:0, wasNight:false, lastChunk:-1, throttle:{}, gutT:40, preview:null, denSigT:0, denSig:'', denWolf:{ x:370, y:0, tx:370, slot:0, face:1, idle:0, ph:0 } };
+const SAVE_KEY = 'ridgepack.save.v1';
+
+function findStart() {
+  const c = WORLD / 2;
+  for (let r = 0; r < 500; r += 2) for (let k = 0; k < 24; k++) {
+    const a = k / 24 * Math.PI * 2, tx = Math.round(c + Math.cos(a) * r), ty = Math.round(c + Math.sin(a) * r);
+    const t = terrainAt(tx, ty);
+    if ((t === T.GRASS || t === T.FOREST) && terrainAt(tx + 3, ty) !== T.WATER && terrainAt(tx - 3, ty) !== T.WATER) return { x: tx * TILE + 16, y: ty * TILE + 16 };
+  }
+  return { x: c * TILE, y: c * TILE };
+}
+function setSeed(sd) {
+  seed = sd; chunks = new Map(); canvasCount = 0;
+  OV.row = 0; OV.ctx.fillStyle = '#0d110f'; OV.ctx.fillRect(0, 0, OV.N, OV.N);
+  MM.cx = -1e9;
+}
+function newState(sd) {
+  setSeed(sd);
+  const st = findStart();
+  return {
+    seed: sd, day: 1, dayT: 0.1, den: null, pack: [], over: false,
+    p: { x: st.x, y: st.y, vx: 0, vy: 0, ang: 0, hp: 100, hunger: 100, stam: 100, carry: 0, biteCd: 0, walk: 0, hurtT: 0, lunge: 0, exhausted: false, sprinting: false, still: 0, cause: '', sneak: false, inside: false },
+    stats: { kills: 0, pupsRaised: 0, bestPack: 1, bears: 0 },
+    explored: new Uint8Array(NCH * NCH),
+  };
+}
+function resetRuntime() {
+  R.ents = []; R.meats = []; R.fx = []; R.texts = []; R.rings = [];
+  R.time = 0; R.spawnT = 0; R.lastChunk = -1; R.wasNight = nightAmt(S.dayT) > 0.5; R.gutT = 40; R.throttle = {};
+  R.cam.x = S.p.x; R.cam.y = S.p.y;
+  fogCtx.clearRect(0, 0, NCH, NCH);
+  fogCtx.fillStyle = '#fff';
+  for (let i = 0; i < S.explored.length; i++) if (S.explored[i]) fogCtx.fillRect(i % NCH, (i / NCH) | 0, 1, 1);
+}
+
+/* ---------- save ---------- */
+function packBits(arr) { let s = ''; for (let i = 0; i < arr.length; i += 8) { let b = 0; for (let k = 0; k < 8; k++) if (arr[i + k]) b |= 1 << k; s += String.fromCharCode(b); } return btoa(s); }
+function unpackBits(str, n) { const out = new Uint8Array(n); try { const s = atob(str); for (let i = 0; i < n; i++) out[i] = (s.charCodeAt(i >> 3) >> (i & 7)) & 1; } catch (e) {} return out; }
+function serialize() {
+  const p = S.p;
+  return { v: 1, world: WORLD, seed: S.seed, day: S.day, dayT: S.dayT, den: S.den, stats: S.stats,
+    p: { x: p.x, y: p.y, hp: p.hp, hunger: p.hunger, stam: p.stam, carry: p.carry, ang: p.ang },
+    pack: S.pack.map(w => ({ name: w.name, coat: w.coat, hp: w.hp, hungerDays: w.hungerDays })),
+    explored: packBits(S.explored) };
+}
+function deserialize(d) {
+  const st = newState(d.seed);
+  st.day = d.day; st.dayT = d.dayT; st.den = normDen(d.den); st.stats = Object.assign(st.stats, d.stats);
+  Object.assign(st.p, d.p);
+  st.pack = (d.pack || []).map((w, i) => makePackWolf(w.name, w.coat, st.p.x - 40 - i * 10, st.p.y + 20, w.hp, w.hungerDays));
+  st.explored = unpackBits(d.explored, NCH * NCH);
+  if (!d.world || d.world !== WORLD) {
+    // save from the larger world: keep its center, which is this world
+    const ow = d.world || OLD_WORLD, off = (ow - WORLD) / 2, sh = off * TILE, oN = Math.ceil(ow / CH), cs = Math.floor(off / CH);
+    const old = unpackBits(d.explored, oN * oN);
+    st.explored = new Uint8Array(NCH * NCH);
+    for (let cy = 0; cy < NCH; cy++) for (let cx = 0; cx < NCH; cx++) { const ox = cx + cs, oy = cy + cs; if (ox < oN && oy < oN && old[oy * oN + ox]) st.explored[cy * NCH + cx] = 1; }
+    const inside = o => o.x > 200 && o.y > 200 && o.x < WPX - 200 && o.y < WPX - 200 && canWalk('wolf', tileAt(o.x, o.y));
+    st.p.x -= sh; st.p.y -= sh;
+    if (st.den) { st.den.x -= sh; st.den.y -= sh; if (!inside(st.den)) st.den = null; }
+    if (!inside(st.p)) Object.assign(st.p, st.den ? { x: st.den.x, y: st.den.y + 40 } : findStart());
+    st.pack.forEach((w, i) => { w.x = st.p.x - 40 - i * 10; w.y = st.p.y + 20; });
+  }
+  return st;
+}
+function save() { if (!S || S.over || R.mode === 'title') return; try { localStorage.setItem(SAVE_KEY, JSON.stringify(serialize())); } catch (e) {} }
+function loadSave() { try { const s = localStorage.getItem(SAVE_KEY); return s ? JSON.parse(s) : null; } catch (e) { return null; } }
+function clearSave() { try { localStorage.removeItem(SAVE_KEY); } catch (e) {} }
+
+/* ---------- messages ---------- */
+const toastsEl = document.getElementById('toasts');
+function toast(msg, kind = '', key = null, cd = 6) {
+  if (key) { if (R.throttle[key] > R.time) return; R.throttle[key] = R.time + cd; }
+  const el = document.createElement('div');
+  el.className = 'toast panel ' + kind; el.textContent = msg;
+  toastsEl.appendChild(el);
+  while (toastsEl.children.length > 4) toastsEl.firstChild.remove();
+  setTimeout(() => el.remove(), 4800);
+}
+function floatText(x, y, text, color) { R.texts.push({ x, y, text, color, life: 1.4 }); }
+function blood(x, y, n = 8) { for (let i = 0; i < n; i++) { const a = rand() * 6.28, s = 40 + rand() * 120; R.fx.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: 0.5 + rand() * 0.4, size: 1.5 + rand() * 2.5, color: '#8e1f17' }); } }
+
+/* ---------- entities ---------- */
+function makePackWolf(name, coat, x, y, hp = 55, hungerDays = 0) {
+  return { name, coat, x, y, hp, maxhp: 55, ang: rand() * 6.28, walk: 0, biteCd: 0, hitT: 0, task: 'follow', target: null, retarget: 0, hungerDays, kind: 'wolf', r: 12 };
+}
+function spawnEnt(kind, x, y) {
+  const base = { kind, x, y, ang: rand() * 6.28, dir: rand() * 6.28, t: rand() * 2, walk: 0, hitT: 0, state: 'wander', alpha: 1 };
+  if (kind === 'rabbit') Object.assign(base, { hp: 10, maxhp: 10, r: 8, moving: false });
+  if (kind === 'deer') Object.assign(base, { hp: 36, maxhp: 36, r: 13, moving: false, fleeStam: 4.5, tired: 0, buck: rand() < 0.35 });
+  if (kind === 'bear') Object.assign(base, { hp: 95, maxhp: 95, r: 20, swipeCd: 0, chaseT: 0, ignoreDen: 0, eatT: 0, calm: 0 });
+  if (kind === 'hunter') Object.assign(base, { hp: 999, maxhp: 999, r: 11, scan: rand() * 6, face: base.dir, detT: 0, aimT: 0, target: null, reload: 0, alpha: 1, flash: 0 });
+  R.ents.push(base);
+  return base;
+}
+function fits(kind, t) {
+  if (kind === 'rabbit') return t === T.GRASS || t === T.MEADOW || t === T.FOREST;
+  if (kind === 'deer') return t === T.GRASS || t === T.FOREST || t === T.MEADOW;
+  if (kind === 'bear') return t === T.FOREST || t === T.DENSE;
+  if (kind === 'hunter') return t === T.MEADOW || t === T.GRASS;
+  return false;
+}
+function trySpawn(kind) {
+  const p = S.p;
+  for (let k = 0; k < 8; k++) {
+    const a = rand() * 6.28, d = 950 + rand() * 700, x = p.x + Math.cos(a) * d, y = p.y + Math.sin(a) * d;
+    if (x < 100 || y < 100 || x > WPX - 100 || y > WPX - 100) continue;
+    if (!fits(kind, tileAt(x, y))) continue;
+    if (S.den && (kind === 'bear' || kind === 'hunter') && dist({ x, y }, S.den) < 700) continue;
+    if (kind === 'deer') { const n = 2 + (rand() * 3 | 0); for (let i = 0; i < n; i++) spawnEnt('deer', x + (rand() - 0.5) * 120, y + (rand() - 0.5) * 120); }
+    else spawnEnt(kind, x, y);
+    return true;
+  }
+  return false;
+}
+function spawning() {
+  const p = S.p, cnt = { rabbit: 0, deer: 0, bear: 0, hunter: 0 };
+  for (const e of R.ents) if (dist(e, p) < 2000) cnt[e.kind]++;
+  if (cnt.rabbit < 10) trySpawn('rabbit');
+  if (cnt.deer < 6 && rand() < 0.35) trySpawn('deer');
+  const maxBears = 2 + (S.day > 4 ? 1 : 0);
+  if (cnt.bear < maxBears && rand() < 0.15) trySpawn('bear');
+  const maxHunters = Math.min(4, 1 + Math.floor((S.day - 1) / 2));
+  if (huntHours() && (S.day > 1 || R.time > 60) && cnt.hunter < maxHunters && rand() < 0.12) trySpawn('hunter');
+}
+function dropMeat(x, y, n) { for (let i = 0; i < n; i++) R.meats.push({ x: x + (rand() - 0.5) * 30, y: y + (rand() - 0.5) * 30, life: 180, rot: rand() * 6.28 }); }
+function hitEnt(e, dmg, attacker) {
+  e.hp -= dmg; e.hitT = 0.18;
+  blood(e.x, e.y, 6);
+  if (e.kind === 'rabbit' || e.kind === 'deer') { e.state = 'flee'; e.fleeFrom = attacker; }
+  if (e.kind === 'bear') { if (e.state !== 'flee') { e.state = 'chase'; e.target = attacker; e.chaseT = 0; } if (e.hp < e.maxhp * 0.28) { e.state = 'flee'; e.t = 7; } sfx.growl(); }
+  if (e.hp <= 0) killEnt(e, attacker);
+}
+function killEnt(e, attacker) {
+  const i = R.ents.indexOf(e); if (i >= 0) R.ents.splice(i, 1);
+  const n = e.kind === 'rabbit' ? 1 : e.kind === 'deer' ? 3 : e.kind === 'bear' ? 5 : 0;
+  dropMeat(e.x, e.y, n); blood(e.x, e.y, 16);
+  S.stats.kills++;
+  if (e.kind === 'bear') { S.stats.bears++; toast('The bear is down. Five portions of meat on the ground.', 'good'); }
+  floatText(e.x, e.y - 20, `+${n} meat`, '#efe6d2');
+}
+
+/* ---------- player ---------- */
+const keys = {};
+const touch = { jx: 0, jy: 0, sprint: false };
+function damagePlayer(amt, cause) {
+  const p = S.p; p.hp -= amt; p.hurtT = 0.35; p.cause = cause;
+  if (!reduceMotion) R.shake = Math.min(14, R.shake + amt * 0.4);
+  floatText(p.x, p.y - 26, `-${Math.round(amt)}`, '#ff8a7a');
+}
+function updatePlayer(dt) {
+  const p = S.p;
+  if (p.inside) {
+    p.vx = p.vy = 0; p.sprinting = false; p.still += dt; p.hurtT -= dt;
+    p.stam = Math.min(100, p.stam + 25 * dt);
+    p.hunger -= 0.2 * dt;
+    if (p.hunger <= 0) { p.hunger = 0; damagePlayer(1.5 * dt, 'Starved'); toast('You are starving. Eat from the store or go hunt.', 'bad', 'starve', 12); }
+    if (p.hunger > 35) p.hp += (hasCh(S.den, 'nook') ? 9 : 4.5) * dt;
+    p.hp = Math.min(100, p.hp);
+    if (S.den) { p.x = S.den.x; p.y = S.den.y; }
+    return;
+  }
+  let ix = (keys.d || keys.arrowright ? 1 : 0) - (keys.a || keys.arrowleft ? 1 : 0) + touch.jx;
+  let iy = (keys.s || keys.arrowdown ? 1 : 0) - (keys.w || keys.arrowup ? 1 : 0) + touch.jy;
+  const len = Math.hypot(ix, iy); if (len > 1) { ix /= len; iy /= len; }
+  const moving = len > 0.12;
+  const t = tileAt(p.x, p.y);
+  let spd = 150 * tileSpeed(t);
+  p.sprinting = false;
+  if ((keys.shift || touch.sprint) && moving && p.sneak) { p.sneak = false; syncSneakBtn(); }
+  if (p.sneak) spd *= 0.5;
+  if ((keys.shift || touch.sprint) && moving && p.stam > 0 && !p.exhausted) { spd *= 1.75; p.stam -= 24 * dt; p.sprinting = true; if (p.stam <= 0) { p.stam = 0; p.exhausted = true; toast('Out of breath. Walk to recover.', '', 'breath', 10); } }
+  else p.stam += (moving ? 10 : 18) * dt;
+  if (p.exhausted && p.stam > 30) p.exhausted = false;
+  if (t === T.DEEP) { p.stam -= 12 * dt; if (p.stam <= 0) { p.stam = 0; damagePlayer(5 * dt, 'Drowned in deep water'); toast('You are sinking. Get to shore.', 'bad', 'drown', 5); } }
+  p.stam = clamp(p.stam, 0, 100);
+  const k = Math.min(1, dt * 10);
+  p.vx += (ix * spd - p.vx) * k; p.vy += (iy * spd - p.vy) * k;
+  moveBody(p, p.vx, p.vy, dt, 'wolf', 12);
+  if (moving) { p.ang = lerpAng(p.ang, Math.atan2(iy, ix), dt * 12); p.still = 0; } else p.still += dt;
+  p.walk += Math.hypot(p.vx, p.vy) * dt * 0.09;
+  p.biteCd -= dt; p.hurtT -= dt; p.lunge = Math.max(0, p.lunge - dt);
+  p.hunger -= (0.34 + (p.sprinting ? 0.4 : 0)) * dt;
+  if (p.hunger <= 0) { p.hunger = 0; damagePlayer(1.5 * dt, 'Starved'); toast('You are starving. Eat something.', 'bad', 'starve', 12); }
+  const atDen = S.den && dist(p, S.den) < 70;
+  if (p.hunger > 35) p.hp += (atDen && p.still > 0.5 ? (hasCh(S.den, 'nook') ? 9 : 4.5) : 0.7) * dt;
+  p.hp = Math.min(100, p.hp); p.hunger = Math.min(100, p.hunger);
+}
+function nearestMeat(maxD) {
+  let best = null, bd = maxD;
+  for (const m of R.meats) { const d = dist(m, S.p); if (d < bd) { bd = d; best = m; } }
+  return best;
+}
+function bite() {
+  const p = S.p;
+  if (p.biteCd > 0) return;
+  p.biteCd = 0.42; p.lunge = 0.14; sfx.bite();
+  let best = null, bs = 1e9;
+  for (const e of R.ents) {
+    if (e.kind === 'hunter') { if (dist(e, p) < 70) toast('You will not bite an armed hunter. Slip away instead.', 'bad', 'hbite', 8); continue; }
+    const d = dist(e, p);
+    if (d > 42 + e.r) continue;
+    const a = Math.atan2(e.y - p.y, e.x - p.x), face = Math.abs(((a - p.ang + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
+    const score = d + face * 18;
+    if (score < bs) { bs = score; best = e; }
+  }
+  if (best) {
+    const ambush = p.sneak && best.state !== 'flee' && best.state !== 'chase' && best.state !== 'warn';
+    if (ambush) floatText(best.x, best.y - 24, 'Ambush!', '#a7bccb');
+    hitEnt(best, ambush ? 26 : 12, p);
+  }
+}
+function action() {
+  const p = S.p;
+  const m = nearestMeat(44);
+  if (m && p.carry < CARRY_CAP) {
+    let got = 0;
+    for (let i = R.meats.length - 1; i >= 0 && p.carry < CARRY_CAP; i--) if (dist(R.meats[i], p) < 50) { R.meats.splice(i, 1); p.carry++; got++; }
+    toast(`Picked up ${got} meat. Store it at the den with E, or eat it with F.`, '', 'pick', 14);
+    return;
+  }
+  if (S.den && dist(p, S.den) < 80) {
+    if (p.carry > 0) {
+      const room = denCap(S.den) - S.den.food;
+      if (room <= 0) { toast('The store is full. Dig a pantry or a bigger den.', 'bad'); return; }
+      const n = Math.min(room, p.carry); S.den.food += n; p.carry -= n;
+      floatText(S.den.x, S.den.y - 30, `+${n} stored`, '#efe6d2'); sfx.eat();
+      return;
+    }
+    enterDen();
+    return;
+  }
+  if (!S.den) {
+    const t = tileAt(p.x, p.y);
+    if (t === T.GRASS || t === T.FOREST || t === T.DENSE || t === T.MEADOW) {
+      S.den = normDen({ x: p.x, y: p.y, level: 0, food: 0, pups: [], litterDay: 0 });
+      for (let i = 0; i < 20; i++) R.fx.push({ x: p.x, y: p.y, vx: (rand() - 0.5) * 160, vy: (rand() - 0.5) * 160, life: 0.6, size: 3, color: '#6b5536' });
+      toast('You dug a burrow. Pick how it looks, then go stock it with meat.', 'good');
+      save(); enterDen();
+    } else toast('You cannot dig here. Find grass or woods.', 'bad', 'nodig', 3);
+  }
+}
+function eat() {
+  const p = S.p;
+  if (p.carry > 0) { p.carry--; p.hunger = Math.min(100, p.hunger + 30); p.hp = Math.min(100, p.hp + 4); sfx.eat(); floatText(p.x, p.y - 26, '+30 hunger', '#d9982c'); return; }
+  const m = nearestMeat(46);
+  if (m) { R.meats.splice(R.meats.indexOf(m), 1); p.hunger = Math.min(100, p.hunger + 30); p.hp = Math.min(100, p.hp + 4); sfx.eat(); floatText(p.x, p.y - 26, '+30 hunger', '#d9982c'); return; }
+  toast('Nothing to eat here. Hunt first.', '', 'noeat', 3);
+}
+function howl() {
+  if (R.throttle.howl > R.time) return;
+  R.throttle.howl = R.time + 6;
+  const p = S.p; sfx.howl();
+  R.rings.push({ x: p.x, y: p.y, r: 10, life: 1.4 });
+  for (const w of S.pack) { w.task = 'follow'; w.target = null; w.retarget = 1.5; if (dist(w, p) > 900) { w.x = p.x - Math.cos(p.ang) * 60; w.y = p.y - Math.sin(p.ang) * 60; } }
+  for (const e of R.ents) {
+    if ((e.kind === 'rabbit' || e.kind === 'deer') && dist(e, p) < 420) { e.state = 'flee'; e.fleeFrom = p; }
+    if (e.kind === 'bear' && dist(e, p) < 320 && S.pack.length >= 3 && e.state === 'chase') { e.state = 'flee'; e.t = 5; toast('Your pack howls as one. The bear backs off.', 'good'); }
+  }
+  if (!S.pack.length) toast('Your howl rolls across the hollow. No answer yet.', '', 'lonehowl', 20);
+}
+
+/* ---------- den ---------- */
+function digChamber(type) {
+  const d = S.den; if (!d || d.level >= DEN_LV.length - 1 || !CHAMBERS[type] || type === 'main') return;
+  const next = DEN_LV[d.level + 1];
+  if (d.food < next.cost) { toast(`Digging needs ${next.cost} stored meat.`, 'bad'); return; }
+  d.food -= next.cost; d.level++; d.chambers.push(type);
+  toast(`You dug a ${CHAMBERS[type].name.toLowerCase()}. Your home is now a ${next.name}.${d.level === BIG_DEN ? ' It is big enough for pups.' : ''}`, 'good');
+  save();
+}
+function raiseLitter() {
+  const d = S.den; if (!d) return;
+  if (d.level < BIG_DEN) { toast(`Pups need a big den. Dig until it is a ${DEN_LV[BIG_DEN].name}.`, 'bad'); return; }
+  if (d.litterDay === S.day) { toast('One litter per day. Try again after dawn.', 'bad'); return; }
+  if (d.food < LITTER_COST) { toast(`Raising a litter needs ${LITTER_COST} stored meat.`, 'bad'); return; }
+  const free = Math.min(pupCap(d) - d.pups.length, MAX_PACK - S.pack.length - d.pups.length);
+  if (free <= 0) { toast(d.pups.length >= pupCap(d) ? 'Every bed is taken. Dig a nursery for more room.' : 'Your pack is at its limit of 8.', 'bad'); return; }
+  d.food -= LITTER_COST; d.litterDay = S.day;
+  const n = Math.max(1, Math.min(free, 2 + Math.floor(rand() * 3)));
+  const names = [];
+  for (let i = 0; i < n; i++) { const nm = pickName(usedNames()); d.pups.push({ name: nm, age: 0, starve: 0, coat: COATS[Math.floor(rand() * COATS.length)], ox: (rand() - 0.5) * 50, oy: (rand() - 0.5) * 40, ph: rand() * 6 }); names.push(nm); }
+  toast(`${n === 1 ? 'A pup is' : n + ' pups are'} born: ${names.join(', ')}. Each eats 1 meat at dawn.`, 'good');
+  save();
+}
+function denEat() {
+  const d = S.den, p = S.p; if (!d || d.food <= 0) return;
+  if (p.hunger > 92) { toast('You are not hungry.', '', 'nothungry', 3); return; }
+  d.food--; p.hunger = Math.min(100, p.hunger + 30); sfx.eat(); floatText(p.x, p.y - 26, '+30 hunger', '#d9982c');
+}
+function dawn() {
+  const d = S.den;
+  if (!d) { toast(`Dawn, day ${S.day}. You still have no den.`); save(); return; }
+  const lines = [];
+  for (let i = d.pups.length - 1; i >= 0; i--) {
+    const pup = d.pups[i];
+    if (d.food > 0) { d.food--; pup.age++; pup.starve = 0; }
+    else { pup.starve++; if (pup.starve >= 2) { d.pups.splice(i, 1); toast(`${pup.name} starved in the den.`, 'bad'); continue; } }
+    if (pup.age >= 3) {
+      if (S.pack.length < MAX_PACK) {
+        d.pups.splice(i, 1);
+        S.pack.push(makePackWolf(pup.name, pup.coat, d.x + 20, d.y + 10));
+        S.stats.pupsRaised++;
+        toast(`${pup.name} is grown and joins your pack.`, 'good');
+      }
+    }
+  }
+  if (S.pack.length) {
+    const cost = Math.ceil(S.pack.length / 2);
+    if (d.food >= cost) { d.food -= cost; S.pack.forEach(w => w.hungerDays = 0); lines.push(`pack ate ${cost}`); }
+    else {
+      d.food = 0; S.pack.forEach(w => w.hungerDays++);
+      const leaver = S.pack.find(w => w.hungerDays >= 3);
+      if (leaver) { S.pack.splice(S.pack.indexOf(leaver), 1); toast(`${leaver.name} left the pack to find food elsewhere.`, 'bad'); }
+      else toast('The pack went hungry. Stock the den.', 'bad');
+    }
+  }
+  S.stats.bestPack = Math.max(S.stats.bestPack, S.pack.length + 1);
+  toast(`Dawn, day ${S.day}. ${d.food} meat left in the den${lines.length ? ', ' + lines.join(', ') : ''}.`);
+  save();
+}
+function nightfall() {
+  toast('Night falls. Hunters head home and bears bed down.', '', 'night', 30);
+  const d = S.den;
+  if (d && dist(S.p, d) > 1600 && rand() < 0.3 && (d.food > 0 || d.pups.length)) {
+    const lost = Math.ceil(d.food * (hasCh(d, 'bolt') ? 0.2 : 0.4)); d.food -= lost;
+    let msg = `While you were away, a bear raided the den and took ${lost} meat.`;
+    if (d.pups.length && !hasCh(d, 'bolt') && rand() < 0.25) { const pup = d.pups.splice(Math.floor(rand() * d.pups.length), 1)[0]; msg += ` ${pup.name} was killed.`; }
+    toast(msg, 'bad');
+  }
+}
+
+/* ---------- AI ---------- */
+function threatsFor(e) {
+  let best = null, bd = 1e9;
+  if (!S.p.inside) { best = S.p; bd = dist(e, S.p); }
+  for (const w of S.pack) { const d = dist(e, w); if (d < bd) { bd = d; best = w; } }
+  return { t: best || S.p, d: bd };
+}
+function preyAlarm(e) {
+  const base = e.kind === 'rabbit' ? 150 : 260, p = S.p, sneak = p.sneak && !p.inside;
+  if (!p.inside) {
+    const r = sneak ? (e.kind === 'rabbit' ? 30 : 42) : base * (concealMult(p) * 1.1 + 0.2);
+    if (dist(e, p) < r) return p;
+  }
+  for (const w of S.pack) { const r = sneak && w.task !== 'hunt' ? 40 : base * 0.8; if (dist(e, w) < r) return w; }
+  return null;
+}
+function concealMult(target) {
+  const t = tileAt(target.x, target.y);
+  let m = t === T.DENSE ? 0.3 : t === T.FOREST ? 0.55 : t === T.MEADOW ? 1.1 : 1;
+  if (target === S.p) { if (S.p.sprinting) m *= 1.3; else if (S.p.sneak) m *= 0.5; else if (S.p.still > 1) m *= 0.75; }
+  return m;
+}
+function updatePrey(e, dt) {
+  const al = preyAlarm(e), base = e.kind === 'rabbit' ? 150 : 260;
+  if (al) { e.state = 'flee'; e.fleeFrom = al; }
+  let spd = 0, dir = e.dir;
+  if (e.state === 'flee') {
+    const src = e.fleeFrom || S.p;
+    const fd = dist(e, src);
+    if (fd > base * 2.2 || fd > 600) { e.state = 'wander'; e.t = 1; }
+    dir = Math.atan2(e.y - src.y, e.x - src.x) + (e.bias || 0);
+    if (e.kind === 'rabbit') { spd = 235; e.bias = Math.sin(R.time * 7 + e.x) * 0.5; }
+    else {
+      if (e.tired > 0) { e.tired -= dt; spd = 135; if (e.tired <= 0) e.fleeStam = 4.5; }
+      else { spd = 258; e.fleeStam -= dt; if (e.fleeStam <= 0) e.tired = 2.6; }
+    }
+  } else {
+    e.t -= dt;
+    if (e.t <= 0) { e.t = 1 + rand() * 3; e.moving = rand() < 0.55; e.dir = rand() * 6.28; }
+    dir = e.dir; spd = e.moving ? (e.kind === 'rabbit' ? 45 : 38) : 0;
+    if (e.kind === 'deer' && e.fleeStam < 4.5) e.fleeStam = Math.min(4.5, e.fleeStam + dt);
+  }
+  if (spd) {
+    spd *= tileSpeed(tileAt(e.x, e.y));
+    const ok = moveBody(e, Math.cos(dir) * spd, Math.sin(dir) * spd, dt, e.kind);
+    if (!ok) { e.dir += (rand() - 0.5) * 3; e.bias = (e.bias || 0) + (rand() < 0.5 ? 1.2 : -1.2); }
+    e.ang = lerpAng(e.ang, dir, dt * 10); e.walk += spd * dt * 0.1;
+  }
+}
+function updateBear(e, dt) {
+  const night = nightAmt(S.dayT) > 0.5;
+  e.swipeCd -= dt; e.ignoreDen -= dt; e.calm -= dt;
+  const { t: th, d } = threatsFor(e);
+  const aggro = night ? 70 : 170;
+  const reach = th === S.p ? aggro * (concealMult(th) + 0.35) : aggro;
+  if ((e.state === 'wander' || e.state === 'sleep' || e.state === 'raid') && d < reach && e.calm <= 0) {
+    e.state = 'warn'; e.target = th; e.warnT = 1.4; e.warnReach = reach; sfx.growl();
+    if (th === S.p) toast('A black bear rears up and huffs. Back away now or it will charge.', 'bad', 'bearwarn', 8);
+  }
+  const tg = e.target;
+  const alive = !!tg && ((tg === S.p && !S.p.inside) || S.pack.includes(tg));
+  let spd = 0, dir = e.dir;
+  if (e.state === 'warn') {
+    const td = alive ? dist(e, tg) : 1e9;
+    if (alive) { dir = Math.atan2(tg.y - e.y, tg.x - e.x); e.ang = lerpAng(e.ang, dir, dt * 6); }
+    e.warnT -= dt;
+    if (!alive || td > e.warnReach * 1.5 + 40) { e.state = 'wander'; e.calm = 6; e.t = 0; if (tg === S.p) toast('You backed off. The bear settles down.', 'good', 'bearcalm', 8); }
+    else if (e.warnT <= 0) { e.state = 'chase'; e.chaseT = 0; if (tg === S.p) toast('The bear charges! Run, or get into water.', 'bad', 'bear', 8); }
+  } else if (e.state === 'chase') {
+    e.chaseT += dt;
+    const td = alive ? dist(e, tg) : 1e9;
+    const tt = alive ? tileAt(tg.x, tg.y) : T.GRASS, wet = tt === T.WATER || tt === T.DEEP;
+    if (!alive || td > 420 || e.chaseT > 6.5 || (wet && td > 60)) {
+      e.state = 'wander'; e.calm = 12; e.t = 0;
+      if (tg === S.p && alive) toast(wet ? 'The bear will not follow you into the water.' : 'The bear gives up the chase.', 'good', 'bearquit', 8);
+    } else {
+      dir = Math.atan2(tg.y - e.y, tg.x - e.x); spd = e.chaseT > 4 ? 140 : 172;
+      if (td < 46 + (tg.r || 12) && e.swipeCd <= 0) {
+        e.swipeCd = 1.25; e.lunge = 0.2;
+        if (tg === S.p) damagePlayer(14, 'Mauled by a black bear');
+        else { tg.hp -= 16; tg.hitT = 0.2; blood(tg.x, tg.y, 5); }
+        sfx.growl();
+      }
+      if (td < 30) spd = 0;
+    }
+  } else if (e.state === 'flee') {
+    e.t -= dt; dir = Math.atan2(e.y - S.p.y, e.x - S.p.x); spd = 170;
+    if (e.t <= 0) { e.state = 'wander'; e.calm = 15; }
+  } else if (e.state === 'raid') {
+    const den = S.den;
+    if (!den || e.ignoreDen > 0) { e.state = 'wander'; }
+    else {
+      const dd = dist(e, den);
+      if (dd > 26) { dir = Math.atan2(den.y - e.y, den.x - e.x); spd = 85; }
+      else {
+        e.eatT += dt;
+        toast(S.p.inside ? 'A bear is digging at your den entrance! Go out and drive it off.' : 'A bear is raiding your den! Drive it off.', 'bad', 'raid', 10);
+        if (e.eatT > (hasCh(den, 'bolt') ? 6 : 3)) {
+          e.eatT = 0;
+          if (den.food > 0) { den.food--; floatText(den.x, den.y - 30, '-1 meat', '#ff8a7a'); }
+          else if (den.pups.length) { const pup = den.pups.splice(Math.floor(rand() * den.pups.length), 1)[0]; toast(`The bear killed ${pup.name}.`, 'bad'); blood(den.x, den.y, 12); }
+          else { e.state = 'wander'; e.ignoreDen = 90; }
+        }
+        e.raidT = (e.raidT || 0) + dt;
+        if (e.raidT > 30) { e.state = 'wander'; e.ignoreDen = 90; e.raidT = 0; }
+      }
+    }
+  } else {
+    if (night) { e.state = 'sleep'; }
+    else {
+      e.t -= dt;
+      if (e.t <= 0) { e.t = 2 + rand() * 4; e.moving = rand() < 0.6; e.dir = rand() * 6.28; }
+      dir = e.dir; spd = e.moving ? 42 : 0;
+      if (S.den && e.ignoreDen <= 0 && dist(e, S.den) < 520 && (S.den.food > 0 || S.den.pups.length)) { e.state = 'raid'; e.eatT = 0; }
+    }
+    if (e.state === 'sleep' && !night) e.state = 'wander';
+  }
+  if (spd) {
+    spd *= tileSpeed(tileAt(e.x, e.y));
+    if (!moveBody(e, Math.cos(dir) * spd, Math.sin(dir) * spd, dt, e.state === 'chase' ? 'hunter' : 'bear', 16)) e.dir += (rand() - 0.5) * 3;
+    e.ang = lerpAng(e.ang, dir, dt * 6); e.walk += spd * dt * 0.06;
+  }
+  e.lunge = Math.max(0, (e.lunge || 0) - dt);
+}
+function updateHunter(e, dt) {
+  e.flash = Math.max(0, e.flash - dt);
+  if (!huntHours() && e.state !== 'leave') { e.state = 'leave'; e.target = null; }
+  if (e.state === 'leave') {
+    const dir = Math.atan2(e.y - S.p.y, e.x - S.p.x);
+    moveBody(e, Math.cos(dir) * 70, Math.sin(dir) * 70, dt, 'hunter');
+    e.face = dir; e.alpha -= dt / 5;
+    if (e.alpha <= 0) R.ents.splice(R.ents.indexOf(e), 1);
+    return;
+  }
+  const RANGE = 360;
+  if (e.state === 'wander') {
+    e.t -= dt;
+    if (e.t <= 0) { e.t = 3 + rand() * 5; e.dir += (rand() - 0.5) * 2.2; e.moving = rand() < 0.75; }
+    e.scan += dt * 0.7;
+    e.face = e.dir + Math.sin(e.scan) * 0.8;
+    if (e.moving && !moveBody(e, Math.cos(e.dir) * 48, Math.sin(e.dir) * 48, dt, 'hunter')) e.dir += Math.PI * (0.5 + rand());
+    e.walk += (e.moving ? 48 : 0) * dt * 0.1;
+    e.detT -= dt;
+    if (e.detT <= 0) {
+      e.detT = 0.2;
+      const cands = S.p.inside ? [...S.pack] : [S.p, ...S.pack];
+      let best = null, bd = 1e9;
+      for (const c of cands) {
+        const d = dist(e, c), range = RANGE * concealMult(c);
+        if (d > range) continue;
+        const a = Math.atan2(c.y - e.y, c.x - e.x), off = Math.abs(((a - e.face + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
+        if (off > 0.95 && d > 110) continue;
+        if (d < bd) { bd = d; best = c; }
+      }
+      if (best) { e.state = 'aim'; e.target = best; e.aimT = 0; if (best === S.p) toast('A hunter has spotted you. Break line of sight!', 'bad', 'spotted', 6); else toast(`A hunter is aiming at ${best.name}!`, 'bad', 'spotpack', 8); }
+    }
+  } else if (e.state === 'aim' || e.state === 'reload') {
+    const tg = e.target, alive = (tg === S.p && !S.p.inside) || S.pack.includes(tg);
+    if (!alive) { e.state = 'wander'; return; }
+    const d = dist(e, tg), range = RANGE * concealMult(tg);
+    e.face = lerpAng(e.face, Math.atan2(tg.y - e.y, tg.x - e.x), dt * 8);
+    const lost = d > Math.max(range * 1.35, 140) || (tileAt(tg.x, tg.y) === T.DENSE && d > 130);
+    if (e.state === 'reload') {
+      e.reload -= dt;
+      if (e.reload <= 0) { if (lost) { e.state = 'wander'; e.t = 2; } else { e.state = 'aim'; e.aimT = 0.4; } }
+      return;
+    }
+    if (lost) { e.state = 'wander'; e.t = 2; return; }
+    e.aimT += dt;
+    if (e.aimT >= 1.5) {
+      e.flash = 0.12; e.state = 'reload'; e.reload = 2.3;
+      sfx.shot(clamp(1 - d / 1400, 0.3, 1));
+      let hc = 0.72;
+      if (tg === S.p && S.p.sprinting) hc = 0.45;
+      if (tileAt(tg.x, tg.y) === T.FOREST) hc *= 0.6;
+      if (rand() < hc) {
+        if (tg === S.p) { damagePlayer(32, 'Shot by a hunter'); toast('You were hit!', 'bad'); }
+        else { tg.hp -= 40; tg.hitT = 0.3; blood(tg.x, tg.y, 10); }
+      } else floatText(tg.x, tg.y - 24, 'miss', '#efe6d2');
+    }
+  }
+}
+function updatePack(dt) {
+  const p = S.p, n = S.pack.length;
+  for (let i = n - 1; i >= 0; i--) {
+    const w = S.pack[i];
+    w.biteCd -= dt; w.hitT -= dt; w.retarget -= dt;
+    if (w.hp <= 0) { S.pack.splice(i, 1); blood(w.x, w.y, 14); toast(`${w.name} has fallen.`, 'bad'); continue; }
+    if (w.retarget <= 0) {
+      w.retarget = 0.35; w.task = 'follow'; w.target = null;
+      let bd = 1e9;
+      for (const e of R.ents) {
+        if (e.kind === 'bear' && e.state === 'chase' && dist(e, w) < 380) { w.task = 'fight'; w.target = e; break; }
+        if ((e.kind === 'rabbit' || e.kind === 'deer') && dist(p, w) < 520 && (!p.sneak || e.state === 'flee')) { const d = dist(e, w); if (d < 240 && d < bd) { bd = d; w.task = 'hunt'; w.target = e; } }
+      }
+    }
+    let tx, ty, spd;
+    if (w.target && R.ents.includes(w.target)) {
+      const e = w.target; tx = e.x; ty = e.y; spd = 268;
+      const d = dist(w, e);
+      if (d < 30 + e.r && w.biteCd <= 0) { w.biteCd = 0.65; hitEnt(e, w.task === 'fight' ? 9 : 8, w); }
+      if (d < 22) spd = 0;
+    } else {
+      const slot = p.ang + Math.PI + (i - (n - 1) / 2) * 0.55;
+      const sd = 52 + (i % 3) * 16;
+      tx = p.x + Math.cos(slot) * sd; ty = p.y + Math.sin(slot) * sd;
+      const d = Math.hypot(tx - w.x, ty - w.y);
+      spd = d < 14 ? 0 : clamp(d * 2.6, 40, 290);
+    }
+    if (dist(w, p) > 1300) { w.x = p.x - Math.cos(p.ang) * 70; w.y = p.y - Math.sin(p.ang) * 70; }
+    if (spd) {
+      const dir = Math.atan2(ty - w.y, tx - w.x);
+      spd *= tileSpeed(tileAt(w.x, w.y));
+      if (!moveBody(w, Math.cos(dir) * spd, Math.sin(dir) * spd, dt, 'wolf')) {
+        moveBody(w, Math.cos(dir + 1.2) * spd, Math.sin(dir + 1.2) * spd, dt, 'wolf');
+      }
+      w.ang = lerpAng(w.ang, dir, dt * 10); w.walk += spd * dt * 0.09;
+    }
+    w.hp = Math.min(w.maxhp, w.hp + (S.den && dist(w, S.den) < 120 ? 3 : 0.6) * dt);
+  }
+}
+
+/* ---------- main update ---------- */
+function update(dt) {
+  R.time += dt;
+  S.dayT += dt / DAY_LEN;
+  if (S.dayT >= 1) { S.dayT -= 1; S.day++; dawn(); }
+  const isNight = nightAmt(S.dayT) > 0.5;
+  if (isNight && !R.wasNight) nightfall();
+  R.wasNight = isNight;
+
+  updatePlayer(dt);
+  updatePack(dt);
+  for (let i = R.ents.length - 1; i >= 0; i--) {
+    const e = R.ents[i]; if (!e) continue;
+    e.hitT -= dt;
+    if (e.kind === 'rabbit' || e.kind === 'deer') updatePrey(e, dt);
+    else if (e.kind === 'bear') updateBear(e, dt);
+    else if (e.kind === 'hunter') updateHunter(e, dt);
+  }
+  // despawn far
+  for (let i = R.ents.length - 1; i >= 0; i--) { const e = R.ents[i]; if (dist(e, S.p) > 2400 && !(e.kind === 'bear' && e.state === 'raid')) R.ents.splice(i, 1); }
+  for (let i = R.meats.length - 1; i >= 0; i--) { const m = R.meats[i]; m.life -= dt; if (m.life <= 0 || dist(m, S.p) > 3000) R.meats.splice(i, 1); }
+  R.spawnT -= dt; if (R.spawnT <= 0) { R.spawnT = 0.4; spawning(); }
+  R.gutT -= dt;
+  if (R.gutT <= 0) {
+    R.gutT = 70 + rand() * 60;
+    for (let k = 0; k < 6; k++) {
+      const a = rand() * 6.28, d = 500 + rand() * 500, x = S.p.x + Math.cos(a) * d, y = S.p.y + Math.sin(a) * d, t = tileAt(x, y);
+      if (t === T.GRASS || t === T.MEADOW || t === T.FOREST) { dropMeat(x, y, 2); toast('You catch the scent of a carcass nearby. Check the minimap.', '', 'gut', 30); break; }
+    }
+  }
+  // fx
+  for (let i = R.fx.length - 1; i >= 0; i--) { const f = R.fx[i]; f.life -= dt; f.x += f.vx * dt; f.y += f.vy * dt; f.vx *= 0.9; f.vy *= 0.9; if (f.life <= 0) R.fx.splice(i, 1); }
+  for (let i = R.texts.length - 1; i >= 0; i--) { const t = R.texts[i]; t.life -= dt; t.y -= 24 * dt; if (t.life <= 0) R.texts.splice(i, 1); }
+  for (let i = R.rings.length - 1; i >= 0; i--) { const r = R.rings[i]; r.life -= dt; r.r += 380 * dt; if (r.life <= 0) R.rings.splice(i, 1); }
+  R.shake *= Math.pow(0.02, dt);
+  // exploration
+  const pcx = Math.floor(S.p.x / CHPX), pcy = Math.floor(S.p.y / CHPX), key = pcy * NCH + pcx;
+  if (key !== R.lastChunk) {
+    R.lastChunk = key;
+    for (let j = -2; j <= 2; j++) for (let i = -2; i <= 2; i++) {
+      const cx = pcx + i, cy = pcy + j;
+      if (cx < 0 || cy < 0 || cx >= NCH || cy >= NCH) continue;
+      const k = cy * NCH + cx;
+      if (!S.explored[k]) { S.explored[k] = 1; fogCtx.fillRect(cx, cy, 1, 1); }
+    }
+  }
+  S.stats.bestPack = Math.max(S.stats.bestPack, S.pack.length + 1);
+  R.saveT -= dt; if (R.saveT <= 0) { R.saveT = 8; save(); }
+  if (S.p.hp <= 0) gameOver();
+}
+
+/* ---------- drawing entities ---------- */
+function drawWolf(g, x, y, ang, s, coat, walk, carry, hurt) {
+  g.save(); g.translate(x, y); g.rotate(ang); g.scale(s, s);
+  const sw = Math.sin(walk * 6), dark = 'rgba(40,36,32,0.55)';
+  g.fillStyle = 'rgba(0,0,0,0.28)'; ellipse(g, 3, 5, 24, 11);
+  g.fillStyle = coat;
+  ellipse(g, 9 + sw * 4, 8, 4, 2.6); ellipse(g, 9 - sw * 4, -8, 4, 2.6); ellipse(g, -9 - sw * 4, 8, 4, 2.6); ellipse(g, -9 + sw * 4, -8, 4, 2.6);
+  g.beginPath(); g.moveTo(-16, 0); g.quadraticCurveTo(-28, sw * 4, -36, sw * 6); g.quadraticCurveTo(-28, sw * 2 + 4, -16, 4); g.fill();
+  ellipse(g, -28, sw * 4.5, 8, 4.2, sw * 0.2);
+  ellipse(g, 0, 0, 20, 9.5);
+  g.fillStyle = dark; ellipse(g, -3, 0, 13, 4.5);
+  g.fillStyle = coat; circle(g, 17, 0, 8);
+  ellipse(g, 25, 0, 6.5, 3.8);
+  g.fillStyle = '#1a1714'; circle(g, 31, 0, 1.8);
+  g.fillStyle = coat; g.beginPath(); g.moveTo(14, -5); g.lineTo(9, -11); g.lineTo(18, -7); g.fill(); g.beginPath(); g.moveTo(14, 5); g.lineTo(9, 11); g.lineTo(18, 7); g.fill();
+  g.fillStyle = dark; g.beginPath(); g.moveTo(13, -6); g.lineTo(10, -9.5); g.lineTo(15.5, -7); g.fill(); g.beginPath(); g.moveTo(13, 6); g.lineTo(10, 9.5); g.lineTo(15.5, 7); g.fill();
+  if (carry) { g.fillStyle = '#9c2f25'; ellipse(g, 30, 0, 6, 4); g.fillStyle = '#e8d8c4'; ellipse(g, 32, 2, 3, 1.2); }
+  if (hurt > 0) { g.fillStyle = `rgba(220,40,30,${hurt})`; ellipse(g, 0, 0, 22, 11); }
+  g.restore();
+}
+function drawEnt(g, e) {
+  const sw = Math.sin(e.walk * 6);
+  g.save(); g.globalAlpha = e.alpha; g.translate(e.x, e.y); g.rotate(e.kind === 'hunter' ? e.face : e.ang);
+  if (e.kind === 'rabbit') {
+    g.fillStyle = 'rgba(0,0,0,0.25)'; ellipse(g, 2, 3, 9, 6);
+    g.fillStyle = '#8a7a66'; ellipse(g, 0, 0, 8, 6); circle(g, 7, 0, 4.5);
+    g.fillStyle = '#7a6a56'; ellipse(g, 2, -3.5, 6, 1.8, -0.25); ellipse(g, 2, 3.5, 6, 1.8, 0.25);
+    g.fillStyle = '#f2ece0'; circle(g, -8, 0, 2.6);
+  } else if (e.kind === 'deer') {
+    g.fillStyle = 'rgba(0,0,0,0.25)'; ellipse(g, 3, 5, 23, 10);
+    g.fillStyle = '#7d5532';
+    for (const [lx, ly] of [[11, 6], [11, -6], [-11, 6], [-11, -6]]) ellipse(g, lx + (ly > 0 ? sw : -sw) * 4 * (lx > 0 ? 1 : -1), ly, 4, 2);
+    g.fillStyle = '#9b6b3e'; ellipse(g, 0, 0, 20, 8.5); ellipse(g, 17, 0, 6, 4);
+    circle(g, 24, 0, 5.2); ellipse(g, 30, 0, 4, 2.6);
+    g.fillStyle = '#5a3c22'; ellipse(g, 21, -6, 4, 1.8, -0.5); ellipse(g, 21, 6, 4, 1.8, 0.5);
+    g.fillStyle = '#f4efe6'; ellipse(g, -19, 0, 3.5, 3);
+    if (e.buck) { g.strokeStyle = '#d8c7a4'; g.lineWidth = 1.6; g.beginPath(); g.moveTo(24, -3); g.lineTo(18, -12); g.lineTo(14, -14); g.moveTo(20, -10); g.lineTo(23, -15); g.moveTo(24, 3); g.lineTo(18, 12); g.lineTo(14, 14); g.moveTo(20, 10); g.lineTo(23, 15); g.stroke(); }
+  } else if (e.kind === 'bear') {
+    const lg = e.lunge > 0 ? 6 : 0;
+    g.translate(lg, 0);
+    g.fillStyle = 'rgba(0,0,0,0.32)'; ellipse(g, 4, 6, 30, 21);
+    g.fillStyle = '#100e0b';
+    for (const [lx, ly] of [[14, 14], [14, -14], [-14, 14], [-14, -14]]) ellipse(g, lx + (ly > 0 ? sw : -sw) * 3 * (lx > 0 ? 1 : -1), ly, 7, 5);
+    g.fillStyle = '#17150f'; ellipse(g, 0, 0, 27, 18);
+    g.fillStyle = '#211e17'; ellipse(g, 4, 0, 12, 10);
+    g.fillStyle = '#17150f'; circle(g, 24, 0, 11.5);
+    g.fillStyle = '#6b4a2f'; ellipse(g, 33, 0, 6, 4.6);
+    g.fillStyle = '#0a0907'; circle(g, 37.5, 0, 2);
+    g.fillStyle = '#17150f'; circle(g, 20, -10, 4); circle(g, 20, 10, 4);
+    if (e.state === 'sleep') { g.restore(); g.save(); g.fillStyle = 'rgba(239,230,210,0.7)'; g.font = '700 13px Alegreya Sans, sans-serif'; g.fillText('z', e.x + 18, e.y - 24 - Math.sin(R.time * 2) * 3); }
+  } else if (e.kind === 'hunter') {
+    g.fillStyle = 'rgba(0,0,0,0.3)'; ellipse(g, 3, 4, 13, 9);
+    g.fillStyle = '#4a4033'; ellipse(g, -2 + sw * 3, 5, 4, 3); ellipse(g, -2 - sw * 3, -5, 4, 3);
+    g.fillStyle = '#e2621f'; ellipse(g, 0, 0, 8, 11.5);
+    g.fillStyle = '#c4501a'; ellipse(g, -1, 0, 4, 9);
+    g.strokeStyle = '#2b2620'; g.lineWidth = 3; g.beginPath(); g.moveTo(2, 6); g.lineTo(30, 4); g.stroke();
+    g.strokeStyle = '#6a4a2a'; g.lineWidth = 4; g.beginPath(); g.moveTo(2, 6); g.lineTo(10, 5.5); g.stroke();
+    g.fillStyle = '#d9b48c'; circle(g, 6, 7, 2.4);
+    g.fillStyle = '#e2621f'; circle(g, 1, 0, 6.2);
+    g.fillStyle = '#c4501a'; ellipse(g, 6, 0, 3, 5);
+    if (e.flash > 0) { g.fillStyle = '#ffd27a'; star(g, 33, 4, 9, 3, 6, R.time * 20); }
+  }
+  g.restore();
+  if (e.kind === 'bear' && e.state === 'warn') { g.fillStyle = '#f0b640'; g.font = '700 24px Alegreya Sans, sans-serif'; g.textAlign = 'center'; g.fillText('!', e.x, e.y - 34); }
+  if (e.hp < e.maxhp && e.kind !== 'hunter' && e.hp > 0) {
+    const w = e.r * 2.2;
+    g.fillStyle = 'rgba(0,0,0,0.5)'; g.fillRect(e.x - w / 2, e.y - e.r - 14, w, 4);
+    g.fillStyle = '#c0392b'; g.fillRect(e.x - w / 2, e.y - e.r - 14, w * e.hp / e.maxhp, 4);
+  }
+}
+function drawDen(g, d) {
+  const r = 24 + d.level * 7, en = d.style ? d.style.entrance : 'hill';
+  g.fillStyle = 'rgba(0,0,0,0.25)'; ellipse(g, d.x + 4, d.y + 6, r * 1.3, r);
+  g.fillStyle = '#6b5536'; ellipse(g, d.x, d.y, r * 1.15, r * 0.88);
+  if (en === 'boulder') { g.fillStyle = '#6f6b63'; star(g, d.x - 6, d.y - 10, r * 1.05, r * 0.85, 5, 0.3); g.fillStyle = '#8f8a80'; star(g, d.x - 12, d.y - 16, r * 0.55, r * 0.44, 5, 0.3); }
+  else if (en === 'oak') { g.strokeStyle = '#4a3420'; g.lineWidth = 3; for (let k = 0; k < 5; k++) { const a = k * 1.25; g.beginPath(); g.moveTo(d.x - 8, d.y - 10); g.quadraticCurveTo(d.x - 8 + Math.cos(a) * r * 0.6, d.y - 10 + Math.sin(a) * r * 0.3, d.x - 8 + Math.cos(a) * r, d.y - 10 + Math.sin(a) * r * 0.75); g.stroke(); } drawTree(g, d.x - 8, d.y - 14, r * 0.9, 0.9, 0); }
+  else if (en === 'log') { g.save(); g.translate(d.x - 6, d.y - 6); g.rotate(-0.35); g.fillStyle = '#5a3e26'; g.fillRect(-r * 1.5, -r * 0.34, r * 2.5, r * 0.68); g.fillStyle = '#74512f'; g.fillRect(-r * 1.5, -r * 0.34, r * 2.5, r * 0.2); g.fillStyle = '#b08a5a'; ellipse(g, r * 1.0, 0, r * 0.2, r * 0.34); g.strokeStyle = '#7a5a36'; g.lineWidth = 1.5; g.beginPath(); g.ellipse(r * 1.0, 0, r * 0.1, r * 0.18, 0, 0, Math.PI * 2); g.stroke(); g.restore(); }
+  else { g.fillStyle = '#7d6542'; ellipse(g, d.x - 4, d.y - 5, r * 0.9, r * 0.6); }
+  g.fillStyle = '#1a140d'; ellipse(g, d.x + 6, d.y + 6, r * 0.5, r * 0.36);
+  if (d.level >= 2) { g.strokeStyle = '#e6dcc8'; g.lineWidth = 2.2; g.lineCap = 'round'; for (let k = 0; k < 3; k++) { const a = k * 2.1 + 0.4, bx = d.x + Math.cos(a) * r * 1.05, by = d.y + Math.sin(a) * r * 0.8; g.beginPath(); g.moveTo(bx - 5, by - 2); g.lineTo(bx + 5, by + 2); g.stroke(); } g.lineCap = 'butt'; }
+  if (d.level >= 3) { g.fillStyle = '#8b867c'; for (let k = 0; k < 7; k++) { const a = k * 0.9 + 3.6; circle(g, d.x + Math.cos(a) * r * 1.35, d.y + Math.sin(a) * r * 1.05, 4); } }
+  for (let i = 0; i < Math.min(d.food, 10); i++) { g.fillStyle = '#8e2b22'; ellipse(g, d.x - r + 8 + (i % 5) * 7, d.y + r * 0.75 + Math.floor(i / 5) * 6, 4, 2.6); }
+  for (const pup of d.pups) {
+    pup.ph += 0.016;
+    const px = d.x + pup.ox + Math.sin(pup.ph * 0.7) * 10, py = d.y + pup.oy + Math.cos(pup.ph * 0.5) * 8;
+    drawWolf(g, px, py, Math.cos(pup.ph * 0.6) * 2, 0.42 + pup.age * 0.07, pup.coat, pup.ph * 1.5, false, 0);
+  }
+}
+
+/* ---------- render ---------- */
+const cv = document.getElementById('game'), ctx = cv.getContext('2d');
+const light = document.createElement('canvas'), lctx = light.getContext('2d');
+let W = 0, H = 0, DPR = 1;
+function resize() {
+  DPR = Math.min(2, window.devicePixelRatio || 1);
+  W = window.innerWidth; H = window.innerHeight;
+  cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+  light.width = cv.width; light.height = cv.height;
+}
+function render() {
+  frameNo++;
+  const z = R.zoom, s = DPR * z;
+  let camX = R.cam.x, camY = R.cam.y;
+  if (R.shake > 0.3) { camX += (rand() - 0.5) * R.shake; camY += (rand() - 0.5) * R.shake; }
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = '#5b5850'; ctx.fillRect(0, 0, cv.width, cv.height);
+  ctx.setTransform(s, 0, 0, s, cv.width / 2 - camX * s, cv.height / 2 - camY * s);
+  const vw = W / z / 2 + 40, vh = H / z / 2 + 40;
+  const x0 = camX - vw, x1 = camX + vw, y0 = camY - vh, y1 = camY + vh;
+  let budget = 3;
+  for (let cy = Math.max(0, Math.floor(y0 / CHPX)); cy <= Math.min(NCH - 1, Math.floor(y1 / CHPX)); cy++) {
+    for (let cx = Math.max(0, Math.floor(x0 / CHPX)); cx <= Math.min(NCH - 1, Math.floor(x1 / CHPX)); cx++) {
+      const c = getChunk(cx, cy); c.last = frameNo;
+      if (!c.canvas && budget > 0) { renderChunk(c); budget--; }
+      if (c.canvas) ctx.drawImage(c.canvas, cx * CHPX, cy * CHPX, CHPX + 0.5, CHPX + 0.5);
+      else for (let j = 0; j < CH; j++) for (let i = 0; i < CH; i++) { ctx.fillStyle = rgb(PAL[c.data[j * CH + i]]); ctx.fillRect(cx * CHPX + i * TILE, cy * CHPX + j * TILE, TILE + 0.5, TILE + 0.5); }
+    }
+  }
+  evictChunks();
+  const inView = (o, m = 60) => o.x > x0 - m && o.x < x1 + m && o.y > y0 - m && o.y < y1 + m;
+  if (R.mode !== 'title' && S) {
+    const p = S.p;
+    if (S.den && inView(S.den, 120)) drawDen(ctx, S.den);
+    // hunter cones
+    for (const e of R.ents) if (e.kind === 'hunter' && inView(e, 400)) {
+      ctx.globalAlpha = e.alpha;
+      ctx.fillStyle = e.state === 'aim' ? 'rgba(226,60,31,0.10)' : 'rgba(226,98,31,0.07)';
+      ctx.beginPath(); ctx.moveTo(e.x, e.y); ctx.arc(e.x, e.y, 360, e.face - 0.95, e.face + 0.95); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = 'rgba(226,98,31,0.18)'; ctx.lineWidth = 1; ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+    for (const m of R.meats) if (inView(m)) {
+      ctx.fillStyle = 'rgba(0,0,0,0.25)'; ellipse(ctx, m.x + 2, m.y + 3, 8, 5);
+      ctx.fillStyle = m.life < 30 ? '#6e3a2c' : '#9c2f25'; ellipse(ctx, m.x, m.y, 7.5, 5, m.rot);
+      ctx.fillStyle = '#e8d8c4'; ellipse(ctx, m.x + Math.cos(m.rot) * 4, m.y + Math.sin(m.rot) * 4, 3.5, 1.4, m.rot);
+    }
+    const list = R.ents.filter(e => inView(e)).concat(S.pack.filter(w => inView(w)));
+    if (!p.inside) list.push(p);
+    list.sort((a, b) => a.y - b.y);
+    for (const e of list) {
+      if (e === p) {
+        ctx.strokeStyle = p.sneak ? 'rgba(167,188,203,0.6)' : 'rgba(239,230,210,0.35)'; ctx.lineWidth = 1.5; if (p.sneak) ctx.setLineDash([4, 5]);
+        ctx.beginPath(); ctx.ellipse(p.x + 2, p.y + 4, 26, 14, 0, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+        const lx = p.lunge > 0 ? Math.cos(p.ang) * 8 : 0, ly = p.lunge > 0 ? Math.sin(p.ang) * 8 : 0;
+        drawWolf(ctx, p.x + lx, p.y + ly, p.ang, p.sneak ? 0.93 : 1.02, p.sneak ? '#7d786e' : '#9a958a', p.walk, p.carry > 0, Math.max(0, p.hurtT));
+      } else if (e.kind === 'wolf') drawWolf(ctx, e.x, e.y, e.ang, 0.92, e.coat, e.walk, false, Math.max(0, e.hitT));
+      else drawEnt(ctx, e);
+    }
+    // aim lines
+    for (const e of R.ents) if (e.kind === 'hunter' && e.state === 'aim' && e.target) {
+      const a = 0.25 + 0.6 * Math.min(1, e.aimT / 1.5);
+      ctx.strokeStyle = `rgba(235,45,30,${a})`; ctx.lineWidth = 1.6; ctx.setLineDash([6, 6]);
+      const sx = e.x + Math.cos(e.face) * 30, sy = e.y + Math.sin(e.face) * 30;
+      ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(e.target.x, e.target.y); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = '#eb2d1e'; ctx.font = '700 18px Alegreya Sans, sans-serif'; ctx.textAlign = 'center'; ctx.fillText('!', e.x, e.y - 20);
+    }
+    for (const f of R.fx) { ctx.globalAlpha = Math.min(1, f.life * 2); ctx.fillStyle = f.color; circle(ctx, f.x, f.y, f.size); }
+    ctx.globalAlpha = 1;
+    for (const r of R.rings) { ctx.strokeStyle = `rgba(239,230,210,${r.life / 1.4 * 0.5})`; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(r.x, r.y, r.r, 0, Math.PI * 2); ctx.stroke(); }
+    ctx.textAlign = 'center'; ctx.font = '700 14px Alegreya Sans, sans-serif';
+    for (const t of R.texts) { ctx.globalAlpha = Math.min(1, t.life); ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillText(t.text, t.x + 1, t.y + 1); ctx.fillStyle = t.color; ctx.fillText(t.text, t.x, t.y); }
+    ctx.globalAlpha = 1;
+    // pack names
+    ctx.font = '500 11px Alegreya Sans, sans-serif';
+    for (const w of S.pack) if (inView(w)) { ctx.fillStyle = 'rgba(239,230,210,0.75)'; ctx.fillText(w.name, w.x, w.y - 20); if (w.hp < w.maxhp) { ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(w.x - 12, w.y - 17, 24, 3); ctx.fillStyle = '#c0392b'; ctx.fillRect(w.x - 12, w.y - 17, 24 * w.hp / w.maxhp, 3); } }
+  }
+  // lighting
+  const night = S ? nightAmt(S.dayT) : 0;
+  const t = S ? S.dayT : 0.2;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  const dusk = t > 0.5 && t < 0.7 ? Math.sin((t - 0.5) / 0.2 * Math.PI) : t < 0.08 ? Math.sin(t / 0.08 * Math.PI) * 0.7 : 0;
+  if (dusk > 0.01) { ctx.fillStyle = `rgba(214,120,50,${dusk * 0.16})`; ctx.fillRect(0, 0, cv.width, cv.height); }
+  if (night > 0.01 && R.mode !== 'title') {
+    lctx.setTransform(1, 0, 0, 1, 0, 0); lctx.globalCompositeOperation = 'source-over';
+    lctx.clearRect(0, 0, light.width, light.height);
+    lctx.fillStyle = `rgba(8,12,30,${night * 0.74})`; lctx.fillRect(0, 0, light.width, light.height);
+    lctx.globalCompositeOperation = 'destination-out';
+    const sx = (S.p.x - camX) * s + cv.width / 2, sy = (S.p.y - camY) * s + cv.height / 2, rr = 300 * s;
+    const gr = lctx.createRadialGradient(sx, sy, rr * 0.15, sx, sy, rr);
+    gr.addColorStop(0, 'rgba(0,0,0,0.92)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+    lctx.fillStyle = gr; lctx.fillRect(sx - rr, sy - rr, rr * 2, rr * 2);
+    if (S.den) {
+      const dx = (S.den.x - camX) * s + cv.width / 2, dy = (S.den.y - camY) * s + cv.height / 2, dr = 110 * s;
+      const g2 = lctx.createRadialGradient(dx, dy, 0, dx, dy, dr); g2.addColorStop(0, 'rgba(0,0,0,0.5)'); g2.addColorStop(1, 'rgba(0,0,0,0)');
+      lctx.fillStyle = g2; lctx.fillRect(dx - dr, dy - dr, dr * 2, dr * 2);
+    }
+    ctx.drawImage(light, 0, 0);
+    // eye shine
+    ctx.setTransform(s, 0, 0, s, cv.width / 2 - camX * s, cv.height / 2 - camY * s);
+    const eyes = (e, off, col) => { const a = e.kind === 'hunter' ? e.face : e.ang; const hx = e.x + Math.cos(a) * off, hy = e.y + Math.sin(a) * off, px = -Math.sin(a) * 3.5, py = Math.cos(a) * 3.5; ctx.fillStyle = col; circle(ctx, hx + px, hy + py, 1.6); circle(ctx, hx - px, hy - py, 1.6); };
+    ctx.globalAlpha = night;
+    for (const e of R.ents) if (inView(e)) { if (e.kind === 'bear' && e.state !== 'sleep') eyes(e, 28, '#f0b640'); else if (e.kind === 'deer') eyes(e, 26, '#d8e8c0'); }
+    for (const w of S.pack) if (inView(w)) eyes(w, 19, '#c8f07a');
+    ctx.globalAlpha = 1;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+  }
+  if (R.mode !== 'title' && S) {
+    // damage vignette
+    if (S.p.hurtT > 0 || S.p.hp < 30) {
+      const a = Math.max(S.p.hurtT * 0.8, S.p.hp < 30 ? (30 - S.p.hp) / 30 * 0.35 * (0.7 + 0.3 * Math.sin(R.time * 5)) : 0);
+      const g = ctx.createRadialGradient(cv.width / 2, cv.height / 2, Math.min(cv.width, cv.height) * 0.3, cv.width / 2, cv.height / 2, Math.max(cv.width, cv.height) * 0.7);
+      g.addColorStop(0, 'rgba(150,0,0,0)'); g.addColorStop(1, `rgba(150,10,0,${a})`);
+      ctx.fillStyle = g; ctx.fillRect(0, 0, cv.width, cv.height);
+    }
+    // edge markers
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    if (S.den) edgeMarker(S.den, '#efe6d2', 'Den');
+    for (const e of R.ents) if (e.kind === 'hunter' && e.state === 'aim') edgeMarker(e, '#eb2d1e', 'Hunter');
+  }
+}
+function edgeMarker(o, col, label) {
+  const sx = (o.x - R.cam.x) * R.zoom + W / 2, sy = (o.y - R.cam.y) * R.zoom + H / 2, m = 40;
+  if (sx > m && sx < W - m && sy > m && sy < H - m) return;
+  const a = Math.atan2(sy - H / 2, sx - W / 2);
+  const hw = W / 2 - m, hh = H / 2 - m, k = Math.min(hw / Math.abs(Math.cos(a) || 1e-6), hh / Math.abs(Math.sin(a) || 1e-6));
+  const x = W / 2 + Math.cos(a) * k, y = H / 2 + Math.sin(a) * k;
+  ctx.save(); ctx.translate(x, y);
+  ctx.save(); ctx.rotate(a); ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(14, 0); ctx.lineTo(-4, -9); ctx.lineTo(-4, 9); ctx.closePath(); ctx.fill(); ctx.restore();
+  const meters = Math.round(dist(o, S.p) / 8);
+  ctx.font = '700 12px Alegreya Sans, sans-serif'; ctx.textAlign = 'center';
+  const ty = Math.sin(a) > 0.5 ? -16 : 24;
+  ctx.fillStyle = 'rgba(0,0,0,0.65)'; ctx.fillText(`${label} ${meters} m`, 1, ty + 1);
+  ctx.fillStyle = col; ctx.fillText(`${label} ${meters} m`, 0, ty);
+  ctx.restore();
+}
+
+/* ---------- minimap ---------- */
+const MM = { N: 84, R: 2600, cx: -1e9, cy: 0, canvas: document.createElement('canvas') };
+MM.canvas.width = MM.canvas.height = MM.N;
+const mctx = MM.canvas.getContext('2d');
+const MINI_COL = PAL.map((c, i) => i === T.FOREST ? [138, 75, 42] : c);
+function renderMiniTerrain() {
+  MM.cx = S.p.x; MM.cy = S.p.y;
+  const img = mctx.createImageData(MM.N, MM.N), step = MM.R * 2 / MM.N;
+  for (let j = 0; j < MM.N; j++) for (let i = 0; i < MM.N; i++) {
+    const wx = MM.cx - MM.R + (i + 0.5) * step, wy = MM.cy - MM.R + (j + 0.5) * step;
+    const c = MINI_COL[terrainAt(Math.floor(wx / TILE), Math.floor(wy / TILE))], o = (j * MM.N + i) * 4;
+    img.data[o] = c[0]; img.data[o + 1] = c[1]; img.data[o + 2] = c[2]; img.data[o + 3] = 255;
+  }
+  mctx.putImageData(img, 0, 0);
+}
+const miniEl = document.getElementById('mini'), miniCtx = miniEl.getContext('2d');
+function drawMini() {
+  const css = miniEl.clientWidth || 150;
+  if (miniEl.width !== Math.round(css * DPR)) { miniEl.width = miniEl.height = Math.round(css * DPR); }
+  const sz = miniEl.width, p = S.p;
+  if (Math.hypot(p.x - MM.cx, p.y - MM.cy) > 320) renderMiniTerrain();
+  const view = 1900, sc = sz / (view * 2);
+  const g = miniCtx;
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.fillStyle = '#0d110f'; g.fillRect(0, 0, sz, sz);
+  const pxPerWorld = MM.N / (MM.R * 2);
+  const srcX = (p.x - view - (MM.cx - MM.R)) * pxPerWorld, srcY = (p.y - view - (MM.cy - MM.R)) * pxPerWorld;
+  g.imageSmoothingEnabled = true;
+  g.drawImage(MM.canvas, srcX, srcY, view * 2 * pxPerWorld, view * 2 * pxPerWorld, 0, 0, sz, sz);
+  const toM = o => [(o.x - p.x) * sc + sz / 2, (o.y - p.y) * sc + sz / 2];
+  const dot = (o, col, r) => { const [x, y] = toM(o); if (x < 0 || y < 0 || x > sz || y > sz) return; g.fillStyle = col; g.beginPath(); g.arc(x, y, r * DPR, 0, 6.28); g.fill(); };
+  for (const m of R.meats) dot(m, '#ff9d8a', 1.8);
+  for (const e of R.ents) {
+    if (e.kind === 'rabbit') dot(e, '#d9cdb0', 1.4);
+    else if (e.kind === 'deer') dot(e, '#c99a5e', 2);
+    else if (e.kind === 'bear') { dot(e, '#eb2d1e', 3.6); dot(e, '#0a0907', 2.6); }
+    else if (e.kind === 'hunter') dot(e, '#ff7a2a', 3);
+  }
+  for (const w of S.pack) dot(w, '#bfb8a8', 2);
+  if (S.den) { const [x, y] = toM(S.den); const cx = clamp(x, 6, sz - 6), cy = clamp(y, 6, sz - 6); g.fillStyle = '#efe6d2'; g.fillRect(cx - 3.5 * DPR, cy - 3.5 * DPR, 7 * DPR, 7 * DPR); g.fillStyle = '#3a2a18'; g.fillRect(cx - 1.5 * DPR, cy - 1.5 * DPR, 3 * DPR, 3 * DPR); }
+  g.save(); g.translate(sz / 2, sz / 2); g.rotate(p.ang); g.fillStyle = '#fff'; g.beginPath(); g.moveTo(6 * DPR, 0); g.lineTo(-4 * DPR, -4 * DPR); g.lineTo(-4 * DPR, 4 * DPR); g.closePath(); g.fill(); g.restore();
+  g.fillStyle = 'rgba(239,230,210,0.8)'; g.font = `700 ${10 * DPR}px Alegreya Sans, sans-serif`; g.textAlign = 'center'; g.fillText('N', sz / 2, 11 * DPR);
+}
+
+/* ---------- world overview map ---------- */
+const OV = { N: 300, row: 0, canvas: document.createElement('canvas') };
+OV.canvas.width = OV.canvas.height = OV.N; OV.ctx = OV.canvas.getContext('2d');
+const fogCv = document.createElement('canvas'); fogCv.width = fogCv.height = NCH;
+const fogCtx = fogCv.getContext('2d'); fogCtx.fillStyle = '#fff';
+function buildOverview(rows) {
+  if (OV.row >= OV.N) return;
+  const step = WORLD / OV.N, end = Math.min(OV.N, OV.row + rows);
+  const img = OV.ctx.createImageData(OV.N, end - OV.row);
+  for (let j = OV.row; j < end; j++) for (let i = 0; i < OV.N; i++) {
+    const c = MINI_COL[terrainAt(Math.floor((i + 0.5) * step), Math.floor((j + 0.5) * step))], o = ((j - OV.row) * OV.N + i) * 4;
+    img.data[o] = c[0]; img.data[o + 1] = c[1]; img.data[o + 2] = c[2]; img.data[o + 3] = 255;
+  }
+  OV.ctx.putImageData(img, 0, OV.row);
+  OV.row = end;
+}
+const bigEl = document.getElementById('bigmap'), bigCtx = bigEl.getContext('2d');
+const fogTmp = document.createElement('canvas'), fogTmpCtx = fogTmp.getContext('2d');
+function drawBigMap() {
+  buildOverview(OV.N);
+  const css = Math.floor(Math.min(W - 32, H - 140, 720));
+  bigEl.style.width = bigEl.style.height = css + 'px';
+  const sz = Math.round(css * DPR);
+  if (bigEl.width !== sz) { bigEl.width = bigEl.height = sz; fogTmp.width = fogTmp.height = sz; }
+  const g = bigCtx;
+  g.imageSmoothingEnabled = true;
+  g.drawImage(OV.canvas, 0, 0, sz, sz);
+  fogTmpCtx.globalCompositeOperation = 'source-over';
+  fogTmpCtx.fillStyle = '#0f130f'; fogTmpCtx.fillRect(0, 0, sz, sz);
+  fogTmpCtx.globalCompositeOperation = 'destination-out';
+  fogTmpCtx.imageSmoothingEnabled = true;
+  const fs = sz * (NCH * CH) / WORLD;
+  fogTmpCtx.drawImage(fogCv, 0, 0, fs, fs);
+  g.drawImage(fogTmp, 0, 0);
+  const sc = sz / WPX;
+  if (S.den) { g.fillStyle = '#efe6d2'; g.fillRect(S.den.x * sc - 5 * DPR, S.den.y * sc - 5 * DPR, 10 * DPR, 10 * DPR); g.fillStyle = '#3a2a18'; g.fillRect(S.den.x * sc - 2 * DPR, S.den.y * sc - 2 * DPR, 4 * DPR, 4 * DPR); }
+  g.save(); g.translate(S.p.x * sc, S.p.y * sc); g.rotate(S.p.ang); g.fillStyle = '#fff'; g.strokeStyle = '#000'; g.lineWidth = DPR;
+  g.beginPath(); g.moveTo(9 * DPR, 0); g.lineTo(-6 * DPR, -6 * DPR); g.lineTo(-6 * DPR, 6 * DPR); g.closePath(); g.fill(); g.stroke(); g.restore();
+  let ex = 0; for (let i = 0; i < S.explored.length; i++) ex += S.explored[i];
+  document.getElementById('mapInfo').textContent = `${(ex / (NCH * NCH) * 100).toFixed(1)}% explored · 3 km across`;
+}
+
+/* ---------- sneak ---------- */
+function syncSneakBtn() { const b = document.querySelector('.tbtns [data-act="sneak"]'); if (b) b.classList.toggle('on', !!(S && S.p.sneak)); }
+function toggleSneak() {
+  const p = S.p; if (p.inside) return;
+  p.sneak = !p.sneak; syncSneakBtn();
+  toast(p.sneak ? 'Sneaking. Deer and rabbits will not notice you until you pounce.' : 'You stop sneaking.', '', 'sneak' + p.sneak, 15);
+}
+
+/* ---------- underground den ---------- */
+const SURFACE = 160, ENTRANCE_X = 200;
+const SLOTS = [ { x:380, y:350, rx:135, ry:66 }, { x:745, y:305, rx:112, ry:56 }, { x:255, y:530, rx:112, ry:54 }, { x:705, y:525, rx:122, ry:58 } ];
+const WALLS = { clay:[140,76,46], stone:[106,102,95], roots:[96,68,44], loam:[176,142,92] };
+const BEDDING = { leaves:[112,58,30], moss:[66,94,46], needles:[122,68,34], fur:[128,122,114] };
+const denCv = document.getElementById('denCanvas'), dctx = denCv.getContext('2d');
+let denView = { s: 1, ox: 0, oy: 0 };
+function enterDen() {
+  const p = S.p, d = S.den; if (!d || dist(p, d) > 90) return;
+  p.inside = true; p.sneak = false; syncSneakBtn(); p.x = d.x; p.y = d.y; p.vx = p.vy = 0;
+  R.denWolf = { x: SLOTS[0].x, y: SLOTS[0].y + SLOTS[0].ry * 0.55, tx: SLOTS[0].x, slot: 0, face: 1, idle: 0, ph: 0 };
+  $('denview').hidden = false; $('mapview').hidden = true; document.body.classList.add('inden');
+  refreshDenSide(true);
+}
+function leaveDen() {
+  if (!S.p.inside) return;
+  S.p.inside = false; S.p.y += 36; S.p.ang = Math.PI / 2;
+  $('denview').hidden = true; document.body.classList.remove('inden'); save();
+}
+function denSig() {
+  const d = S.den;
+  return [d.level, d.food, d.pups.map(pp => pp.name + pp.age + pp.starve).join(), S.pack.length, d.litterDay === S.day, d.chambers.join(), JSON.stringify(d.style), S.p.hunger > 92].join('|');
+}
+function refreshDenSide(force) {
+  if (!S.den) return;
+  const sig = denSig();
+  if (!force && sig === R.denSig) return;
+  R.denSig = sig; renderDenSide();
+}
+function chipGroup(key, label) {
+  const st = S.den.style;
+  return `<p class="grouplabel">${label}</p><div class="chips">` + STYLE_OPTS[key].map(([v, n]) =>
+    `<button type="button" data-style="${key}:${v}" aria-pressed="${key === 'decor' ? st.decor.includes(v) : st[key] === v}">${n}</button>`).join('') + '</div>';
+}
+function renderDenSide() {
+  const d = S.den, lv = DEN_LV[d.level], next = DEN_LV[d.level + 1], pc = pupCap(d);
+  const canLitter = d.level >= BIG_DEN && d.food >= LITTER_COST && d.litterDay !== S.day && d.pups.length < pc && S.pack.length + d.pups.length < MAX_PACK;
+  let note;
+  if (d.level < BIG_DEN) note = `Pups need a big den. Dig until your home is a <b>${DEN_LV[BIG_DEN].name}</b>, then store ${LITTER_COST} meat.`;
+  else if (d.litterDay === S.day) note = 'A litter was born today. The next can come after dawn.';
+  else if (d.pups.length >= pc) note = 'Every bed is taken. Dig a nursery for more room.';
+  else if (S.pack.length + d.pups.length >= MAX_PACK) note = 'Your pack is at its limit of 8.';
+  else if (d.food < LITTER_COST) note = `You need <b>${LITTER_COST} stored meat</b> to raise a litter. You have ${d.food}.`;
+  else note = `Ready. A litter costs ${LITTER_COST} meat and brings 2 to 4 pups.`;
+  const pups = d.pups.length ? d.pups.map(pp => `${pp.name} (${pp.age}/3 days${pp.starve ? ', hungry' : ''})`).join(', ') : 'No pups yet.';
+  const dig = next
+    ? `<p>Chamber ${d.level + 2} of 4 makes your home a <b>${next.name}</b>${d.level + 1 === BIG_DEN ? ', big enough for pups' : ''}. Costs ${next.cost} meat (you have ${d.food}).</p><div class="digopts">` +
+      ['nursery', 'pantry', 'nook', 'bolt'].map(t => `<button type="button" data-dig="${t}" ${d.food < next.cost ? 'disabled' : ''}><span>${CHAMBERS[t].name}</span><small>${CHAMBERS[t].desc}</small></button>`).join('') + '</div>'
+    : '<p>All four chambers are dug. A den does not get bigger than this.</p>';
+  $('denside').innerHTML = `
+    <header><h3>${lv.name}</h3><span class="label">Level ${d.level + 1} of 4</span></header>
+    <div class="dstats"><span>Meat stored</span><span>${d.food} / ${denCap(d)}</span><span>Pup beds</span><span>${pc ? d.pups.length + ' / ' + pc : 'None yet'}</span><span>Pack</span><span>${S.pack.length ? (S.pack.length + 1) + ' wolves' : 'Just you'}</span></div>
+    <section><h4>Pups</h4><p>${pups}</p><p>${note}</p><button type="button" class="primary" data-do="litter" ${canLitter ? '' : 'disabled'}>Raise a litter (${LITTER_COST} meat)</button></section>
+    <section><h4>Dig a new chamber</h4>${dig}</section>
+    <section><h4>Make it yours</h4>${chipGroup('walls', 'Walls')}${chipGroup('bedding', 'Bedding')}${chipGroup('entrance', 'Entrance')}${chipGroup('decor', 'Decorations, pick any')}</section>
+    <div class="drow"><button type="button" data-do="eat" ${d.food > 0 && S.p.hunger <= 92 ? '' : 'disabled'}>Eat from store</button><button type="button" data-do="leave">Leave den<span class="kbonly"> (E)</span></button></div>`;
+}
+function wavyBand(g, L, Rr, y0, h, ph) {
+  g.beginPath(); g.moveTo(L, y0);
+  for (let x = L; x <= Rr + 25; x += 25) g.lineTo(x, y0 + Math.sin(x * 0.011 + ph) * 7);
+  for (let x = Rr + 25; x >= L - 25; x -= 25) g.lineTo(x, y0 + h + Math.sin(x * 0.013 + ph * 1.3) * 7);
+  g.closePath(); g.fill();
+}
+function drawWolfSide(g, x, y, s, coat, ph, pose, face) {
+  g.save(); g.translate(x, y); g.scale(s * face, s);
+  const dark = 'rgba(40,36,32,0.5)';
+  g.fillStyle = 'rgba(0,0,0,0.3)'; ellipse(g, 0, 1, 30, 4);
+  if (pose === 'sleep') {
+    const br = 1 + Math.sin(ph * 2.2) * 0.04;
+    g.fillStyle = coat; ellipse(g, 0, -12 * br, 26, 12.5 * br);
+    g.fillStyle = dark; ellipse(g, -3, -18 * br, 17, 4.5);
+    g.fillStyle = coat; circle(g, 19, -9, 9); ellipse(g, 27, -6, 7, 4);
+    g.beginPath(); g.moveTo(14, -15); g.lineTo(16, -25); g.lineTo(21, -16); g.fill();
+    g.fillStyle = '#1a1714'; circle(g, 33, -6.5, 1.7);
+    g.strokeStyle = '#1a1714'; g.lineWidth = 1.2; g.beginPath(); g.moveTo(21, -11); g.lineTo(25, -11); g.stroke();
+    g.fillStyle = coat; ellipse(g, 2, -3, 25, 5);
+    g.fillStyle = 'rgba(255,255,255,0.12)'; ellipse(g, 10, -3, 12, 2.5);
+  } else {
+    const sw = pose === 'walk' ? Math.sin(ph * 9) : 0;
+    g.lineCap = 'round'; g.lineWidth = 5;
+    g.strokeStyle = 'rgba(60,55,48,1)';
+    g.beginPath(); g.moveTo(13, -16); g.lineTo(13 - sw * 6, 0); g.moveTo(-14, -16); g.lineTo(-14 + sw * 6, 0); g.stroke();
+    g.strokeStyle = coat;
+    g.beginPath(); g.moveTo(15, -16); g.lineTo(15 + sw * 6, 0); g.moveTo(-12, -16); g.lineTo(-12 - sw * 6, 0); g.stroke();
+    g.fillStyle = coat;
+    g.beginPath(); g.moveTo(-20, -26); g.quadraticCurveTo(-34, -24, -40, -12 + sw * 2); g.quadraticCurveTo(-30, -16, -20, -20); g.fill();
+    ellipse(g, -34, -16 + sw * 2, 8, 4.5, 0.6);
+    ellipse(g, 0, -22, 23, 10);
+    g.fillStyle = dark; ellipse(g, -3, -28, 14, 4);
+    g.fillStyle = coat; circle(g, 22, -31, 8.5); ellipse(g, 31, -29, 7, 4);
+    g.beginPath(); g.moveTo(17, -37); g.lineTo(20, -47); g.lineTo(24, -37); g.fill();
+    g.fillStyle = '#1a1714'; circle(g, 37, -29.5, 1.8); circle(g, 25, -33, 1.3);
+  }
+  g.restore();
+}
+function drawBedding(g, kind, c, i) {
+  const top = c.y + c.ry * 0.36, base = BEDDING[kind] || BEDDING.leaves;
+  g.save(); g.beginPath(); g.ellipse(c.x, c.y, c.rx, c.ry, 0, 0, Math.PI * 2); g.clip();
+  g.fillStyle = rgb(base);
+  g.beginPath(); g.moveTo(c.x - c.rx, top + 6);
+  for (let x = c.x - c.rx; x <= c.x + c.rx; x += 12) g.lineTo(x, top + Math.sin(x * 0.12 + i) * 3);
+  g.lineTo(c.x + c.rx, c.y + c.ry); g.lineTo(c.x - c.rx, c.y + c.ry); g.closePath(); g.fill();
+  for (let k = 0; k < 70; k++) {
+    const hx = hash2(k, i, 77), hy = hash2(k, i, 78), hz = hash2(k, i, 79);
+    const x = c.x - c.rx + hx * c.rx * 2, y = top + 2 + hy * c.ry * 0.7;
+    if (kind === 'moss') { g.fillStyle = rgb([96, 132, 62], 0.85 + hz * 0.3); circle(g, x, y, 3 + hz * 4); }
+    else if (kind === 'needles') { g.strokeStyle = rgb([176, 100, 50], 0.8 + hz * 0.4); g.lineWidth = 1.4; g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(hz * 6) * 7, y + Math.sin(hz * 6) * 3); g.stroke(); }
+    else if (kind === 'fur') { g.fillStyle = rgb([180, 174, 164], 0.85 + hz * 0.25); circle(g, x, y, 2.5 + hz * 3.5); }
+    else { g.fillStyle = rgb(LEAF[k % LEAF.length], 0.9 + hz * 0.2); ellipse(g, x, y, 4 + hz * 2, 2.4, hz * 6); }
+  }
+  g.restore();
+}
+function drawBone(g, x, y, len, ang) {
+  g.save(); g.translate(x, y); g.rotate(ang);
+  g.strokeStyle = '#e6dcc8'; g.lineWidth = 3.4; g.lineCap = 'round';
+  g.beginPath(); g.moveTo(-len / 2, 0); g.lineTo(len / 2, 0); g.stroke();
+  g.fillStyle = '#e6dcc8'; for (const sx of [-1, 1]) { circle(g, sx * len / 2, -2.4, 2.8); circle(g, sx * len / 2, 2.4, 2.8); }
+  g.restore();
+}
+function drawInterior(dt) {
+  const d = S.den; if (!d) return;
+  const cw = denCv.clientWidth || 600, chh = denCv.clientHeight || 400;
+  if (denCv.width !== Math.round(cw * DPR) || denCv.height !== Math.round(chh * DPR)) { denCv.width = Math.round(cw * DPR); denCv.height = Math.round(chh * DPR); }
+  const W2 = denCv.width, H2 = denCv.height, VW = 1000, VH = 660;
+  const s = Math.min(W2 / 760, H2 / 600), ox = W2 / 2 - 500 * s, oy = H2 / 2 - 345 * s;
+  denView = { s, ox, oy };
+  const L = -ox / s, Rr = (W2 - ox) / s, Tp = -oy / s, Bt = (H2 - oy) / s;
+  const g = dctx; g.setTransform(s, 0, 0, s, ox, oy);
+  const st = d.style, wall = WALLS[st.walls] || WALLS.clay, night = nightAmt(S.dayT) > 0.5, n = d.chambers.length, t = R.time;
+  // sky
+  const sky = g.createLinearGradient(0, Tp, 0, SURFACE);
+  sky.addColorStop(0, night ? '#0b1224' : '#7f9db0'); sky.addColorStop(1, night ? '#24324a' : '#d6bb8e');
+  g.fillStyle = sky; g.fillRect(L, Tp, Rr - L, SURFACE - Tp + 2);
+  if (night) { g.fillStyle = 'rgba(239,230,210,0.8)'; for (let k = 0; k < 40; k++) circle(g, L + hash2(k, 1, 5) * (Rr - L), Tp + hash2(k, 2, 5) * (SURFACE - Tp - 50), 1 + hash2(k, 3, 5)); }
+  g.fillStyle = night ? '#141c2c' : '#5f7387';
+  g.beginPath(); g.moveTo(L, SURFACE); for (let x = L; x <= Rr + 20; x += 20) g.lineTo(x, SURFACE - 46 - Math.sin(x * 0.006) * 22 - Math.sin(x * 0.017) * 9); g.lineTo(Rr + 20, SURFACE); g.closePath(); g.fill();
+  for (let x = Math.floor(L / 24) * 24; x < Rr + 24; x += 24) { const h = hash2(x | 0, 7, 99); if (h < 0.3) continue; g.fillStyle = rgb(LEAF[Math.floor(h * 97) % LEAF.length], night ? 0.3 : 0.75); circle(g, x, SURFACE - 12 - h * 12, 12 + h * 9); }
+  // earth and strata
+  g.fillStyle = rgb(wall); g.fillRect(L, SURFACE, Rr - L, Bt - SURFACE);
+  for (let i = 0; i < 10; i++) { g.fillStyle = rgb(wall, 0.8 + (i % 3) * 0.07 - i * 0.012); wavyBand(g, L, Rr, SURFACE + 40 + i * 58, 22 + (i % 2) * 10, i * 1.9); }
+  if (st.walls === 'stone') for (let k = 0; k < 90; k++) { const x = L + hash2(k, 4, 9) * (Rr - L), y = SURFACE + 20 + hash2(k, 5, 9) * (Bt - SURFACE), r = 5 + hash2(k, 6, 9) * 12; g.fillStyle = rgb([124, 120, 112], 0.8 + hash2(k, 7, 9) * 0.4); star(g, x, y, r, r * 0.8, 5, k); }
+  else if (st.walls === 'roots') { g.lineCap = 'round'; for (let k = 0; k < 18; k++) { const x0 = L + hash2(k, 8, 9) * (Rr - L); g.strokeStyle = 'rgba(58,38,22,0.9)'; g.lineWidth = 4 - (k % 3); g.beginPath(); g.moveTo(x0, SURFACE); let x = x0, y = SURFACE; for (let j = 0; j < 6; j++) { const nx = x + (hash2(k, j, 11) - 0.5) * 70, ny = y + 30 + hash2(k, j, 12) * 40; g.quadraticCurveTo(x + (nx - x) * 0.2, (y + ny) / 2, nx, ny); x = nx; y = ny; } g.stroke(); } }
+  else if (st.walls === 'clay') for (let k = 0; k < 120; k++) { g.fillStyle = 'rgba(80,36,20,0.5)'; circle(g, L + hash2(k, 4, 13) * (Rr - L), SURFACE + 20 + hash2(k, 5, 13) * (Bt - SURFACE), 1.5 + hash2(k, 6, 13) * 2.5); }
+  else for (let k = 0; k < 200; k++) { g.fillStyle = 'rgba(232,210,160,0.35)'; circle(g, L + hash2(k, 4, 14) * (Rr - L), SURFACE + 20 + hash2(k, 5, 14) * (Bt - SURFACE), 1 + hash2(k, 6, 14) * 1.5); }
+  // grass line
+  g.fillStyle = night ? '#2f4422' : '#5f7d3c'; g.fillRect(L, SURFACE - 6, Rr - L, 12);
+  g.strokeStyle = night ? '#3a5229' : '#6f8f44'; g.lineWidth = 2;
+  for (let x = Math.floor(L / 9) * 9; x < Rr; x += 9) { g.beginPath(); g.moveTo(x, SURFACE - 4); g.lineTo(x + 2, SURFACE - 11 - hash2(x | 0, 3, 3) * 6); g.stroke(); }
+  // oak roots behind tunnels
+  if (st.entrance === 'oak') { g.strokeStyle = '#4a3420'; g.lineCap = 'round'; for (let k = 0; k < 6; k++) { g.lineWidth = 7 - k; g.beginPath(); g.moveTo(ENTRANCE_X + 70, SURFACE); g.quadraticCurveTo(ENTRANCE_X + 40 + k * 22, SURFACE + 40, ENTRANCE_X - 30 + k * 40, SURFACE + 70 + (k % 3) * 25); g.stroke(); } }
+  // tunnels and chambers: rims, then cavities
+  const tunnels = [];
+  tunnels.push([ENTRANCE_X, SURFACE + 20, ENTRANCE_X + 20, 270, SLOTS[0].x - 95, SLOTS[0].y + 15]);
+  if (n > 1) tunnels.push([SLOTS[0].x + 100, SLOTS[0].y + 15, 570, 370, SLOTS[1].x - 85, SLOTS[1].y + 18]);
+  if (n > 2) tunnels.push([SLOTS[0].x - 70, SLOTS[0].y + 35, 250, 440, SLOTS[2].x, SLOTS[2].y - 20]);
+  if (n > 3) tunnels.push([SLOTS[1].x, SLOTS[1].y + 35, 750, 430, SLOTS[3].x + 10, SLOTS[3].y - 30]);
+  d.chambers.forEach((ch, i) => { if (ch === 'bolt') { const c = SLOTS[i]; tunnels.push([c.x + c.rx * 0.55, c.y - 12, c.x + c.rx + 40, c.y - 120, c.x + c.rx + 30, SURFACE + 20]); } });
+  const strokeTunnels = (w, col) => { g.strokeStyle = col; g.lineWidth = w; g.lineCap = 'round'; for (const tn of tunnels) { g.beginPath(); g.moveTo(tn[0], tn[1]); g.quadraticCurveTo(tn[2], tn[3], tn[4], tn[5]); g.stroke(); } };
+  strokeTunnels(56, rgb(wall, 0.58));
+  for (let i = 0; i < n; i++) { const c = SLOTS[i]; g.fillStyle = rgb(wall, 0.58); ellipse(g, c.x, c.y, c.rx + 8, c.ry + 8); }
+  strokeTunnels(44, rgb(wall, 0.24));
+  for (let i = 0; i < n; i++) {
+    const c = SLOTS[i];
+    const gr = g.createRadialGradient(c.x, c.y - c.ry * 0.3, 10, c.x, c.y, c.rx);
+    gr.addColorStop(0, rgb(wall, 0.46)); gr.addColorStop(1, rgb(wall, 0.2));
+    g.fillStyle = gr; ellipse(g, c.x, c.y, c.rx, c.ry);
+  }
+  // openings on the surface
+  g.fillStyle = rgb(wall, 0.18);
+  for (const tn of tunnels) if (tn[5] === SURFACE + 20) { const hx = tn === tunnels[0] ? tn[0] : tn[4]; ellipse(g, hx, SURFACE + 2, 24, 9); }
+  // surface entrance features
+  const E = ENTRANCE_X;
+  if (st.entrance === 'hill') { g.fillStyle = rgb(wall, 0.9); g.beginPath(); g.ellipse(E + 30, SURFACE, 150, 46, 0, Math.PI, 0); g.fill(); g.fillStyle = night ? '#2f4422' : '#5f7d3c'; g.beginPath(); g.ellipse(E + 30, SURFACE - 3, 150, 46, 0, Math.PI, 0); g.lineTo(E + 168, SURFACE - 3); g.fill(); g.fillStyle = rgb(wall, 0.24); g.beginPath(); g.ellipse(E + 4, SURFACE - 4, 26, 22, 0, Math.PI, 0); g.fill(); }
+  else if (st.entrance === 'boulder') { g.fillStyle = '#6a665e'; star(g, E + 52, SURFACE - 34, 66, 54, 6, 0.4); g.fillStyle = '#878278'; star(g, E + 40, SURFACE - 48, 34, 26, 6, 0.4); g.fillStyle = 'rgba(0,0,0,0.25)'; ellipse(g, E + 60, SURFACE - 4, 60, 6); }
+  else if (st.entrance === 'oak') { g.fillStyle = '#4a3420'; g.fillRect(E + 58, SURFACE - 150, 26, 150); g.fillStyle = '#5a4028'; g.fillRect(E + 62, SURFACE - 150, 8, 150); for (let k = 0; k < 9; k++) { g.fillStyle = rgb(LEAF[k % 4], 0.85 + (k % 3) * 0.12); circle(g, E + 71 + Math.cos(k * 0.7) * 60, SURFACE - 160 + Math.sin(k * 1.3) * 26, 34 - (k % 3) * 5); } }
+  else if (st.entrance === 'log') { g.fillStyle = '#5a3e26'; g.beginPath(); g.roundRect ? g.roundRect(E - 18, SURFACE - 40, 220, 38, 16) : g.rect(E - 18, SURFACE - 40, 220, 38); g.fill(); g.fillStyle = '#6e4d2f'; g.fillRect(E - 4, SURFACE - 38, 200, 9); g.fillStyle = '#b08a5a'; ellipse(g, E - 16, SURFACE - 21, 9, 19); g.strokeStyle = '#7a5a36'; g.lineWidth = 1.5; g.beginPath(); g.ellipse(E - 16, SURFACE - 21, 5, 11, 0, 0, Math.PI * 2); g.stroke(); }
+  // bedding + labels
+  for (let i = 0; i < n; i++) drawBedding(g, st.bedding, SLOTS[i], i);
+  // decorations
+  const M = SLOTS[0], floor = M.y + M.ry * 0.42;
+  const dec = st.decor;
+  if (dec.includes('bones')) { drawBone(g, M.x + 78, floor + 10, 26, 0.3); drawBone(g, M.x + 92, floor + 6, 20, -0.5); }
+  if (dec.includes('antler')) { g.save(); g.translate(M.x + 112, floor + 4); g.rotate(-0.5); g.strokeStyle = '#d9c9a6'; g.lineWidth = 3.5; g.lineCap = 'round'; g.beginPath(); g.moveTo(0, 0); g.quadraticCurveTo(-6, -30, 6, -56); g.moveTo(-3, -20); g.lineTo(-16, -30); g.moveTo(1, -36); g.lineTo(-10, -50); g.moveTo(4, -46); g.lineTo(16, -58); g.stroke(); g.restore(); }
+  if (dec.includes('feathers')) for (let k = 0; k < 2; k++) { g.save(); g.translate(M.x - 100 + k * 14, floor + 8 - k * 3); g.rotate(-0.3 + k * 0.5); g.fillStyle = k ? '#8a6a4a' : '#6b5a48'; ellipse(g, 0, 0, 16, 4); g.strokeStyle = '#e8dcc6'; g.lineWidth = 1; g.beginPath(); g.moveTo(-18, 0); g.lineTo(16, 0); g.stroke(); g.fillStyle = '#e8dcc6'; for (let b = -12; b < 12; b += 6) ellipse(g, b, 0, 1.5, 3.5); g.restore(); }
+  if (dec.includes('pinecones')) for (let k = 0; k < 3; k++) { const x = M.x + 30 + k * 13, y = floor + 12 - (k === 1 ? 6 : 0); g.fillStyle = '#6b4526'; ellipse(g, x, y, 6, 9, 0.3); g.strokeStyle = '#3e2714'; g.lineWidth = 1; for (let r = -6; r <= 6; r += 3) { g.beginPath(); g.moveTo(x - 5, y + r); g.lineTo(x + 5, y + r - 2); g.stroke(); } }
+  if (dec.includes('flowers')) { g.strokeStyle = '#4f6a2c'; g.lineWidth = 1.6; for (let k = 0; k < 6; k++) { const x = M.x - 60 + k * 6, h = 18 + (k % 3) * 6; g.beginPath(); g.moveTo(x, floor + 14); g.lineTo(x + (k - 3) * 2, floor + 14 - h); g.stroke(); g.fillStyle = k % 2 ? '#8f7bb8' : '#a993d6'; circle(g, x + (k - 3) * 2, floor + 14 - h, 4); g.fillStyle = '#e6c04a'; circle(g, x + (k - 3) * 2, floor + 14 - h, 1.4); } }
+  // pantry meat
+  const pantryI = d.chambers.indexOf('pantry'), mc = SLOTS[pantryI >= 0 ? pantryI : 0];
+  for (let k = 0; k < Math.min(d.food, 18); k++) { const col = k % 6, row = Math.floor(k / 6); const x = mc.x - mc.rx * 0.62 + col * 13 + row * 6, y = mc.y + mc.ry * 0.5 - row * 8; g.fillStyle = '#8e2b22'; ellipse(g, x, y, 7, 4.5, 0.2); g.fillStyle = '#e8d8c4'; ellipse(g, x + 4, y + 1, 2.5, 1); }
+  // pups
+  const nurseI = d.chambers.indexOf('nursery'), pcC = SLOTS[nurseI >= 0 ? nurseI : 0];
+  d.pups.forEach((pup, j) => {
+    pup.ph = (pup.ph || 0) + dt;
+    const sleep = Math.sin(pup.ph * 0.35 + j * 2) > 0.25;
+    const bx = pcC.x - pcC.rx * 0.2 + (j + 0.5) / d.pups.length * pcC.rx * 0.8;
+    const off = sleep ? 0 : Math.sin(pup.ph * 0.9 + j) * 24, face = Math.cos(pup.ph * 0.9 + j) >= 0 ? 1 : -1;
+    drawWolfSide(g, bx + off, pcC.y + pcC.ry * 0.58, 0.42 + pup.age * 0.08, pup.coat, pup.ph, sleep ? 'sleep' : 'walk', face);
+  });
+  // you
+  const dw = R.denWolf, tc = SLOTS[Math.min(dw.slot, n - 1)], ty = tc.y + tc.ry * 0.56;
+  if (!isFinite(dw.y)) dw.y = ty;
+  const dx = dw.tx - dw.x, dy = ty - dw.y, dl = Math.hypot(dx, dy);
+  let pose = 'stand';
+  if (dl > 3) { const step = Math.min(dl, 240 * dt); dw.x += dx / dl * step; dw.y += dy / dl * step; if (Math.abs(dx) > 1) dw.face = dx > 0 ? 1 : -1; pose = 'walk'; dw.idle = 0; }
+  else { dw.idle += dt; if (dw.idle > 3) pose = 'sleep'; }
+  dw.ph += dt;
+  drawWolfSide(g, dw.x, dw.y, 1, '#9a958a', dw.ph, pose, dw.face);
+  // glow mushrooms
+  if (dec.includes('glow')) {
+    for (let i = 0; i < n; i++) { const c = SLOTS[i]; for (let k = 0; k < 4; k++) {
+      const a = Math.PI + 0.5 + k * 0.6, x = c.x + Math.cos(a) * c.rx * 0.93, y = c.y + Math.sin(a) * c.ry * 0.9;
+      g.save(); g.globalCompositeOperation = 'lighter';
+      const gl = g.createRadialGradient(x, y, 0, x, y, 60); gl.addColorStop(0, `rgba(110,230,200,${0.22 + Math.sin(t * 1.5 + k + i) * 0.05})`); gl.addColorStop(1, 'rgba(110,230,200,0)');
+      g.fillStyle = gl; g.fillRect(x - 60, y - 60, 120, 120); g.restore();
+      g.fillStyle = '#d8f5ea'; g.fillRect(x - 1, y, 2, 7); g.fillStyle = '#7fe0c8'; g.beginPath(); g.ellipse(x, y, 6, 3.5, 0, Math.PI, 0); g.fill();
+    } }
+  }
+  // labels and next slot
+  g.textAlign = 'center'; g.font = '700 13px Alegreya Sans, sans-serif';
+  for (let i = 0; i < n; i++) { const c = SLOTS[i]; g.fillStyle = 'rgba(0,0,0,0.45)'; g.fillText(CHAMBERS[d.chambers[i]].name.toUpperCase(), c.x + 1, c.y - c.ry - 15); g.fillStyle = 'rgba(239,230,210,0.85)'; g.fillText(CHAMBERS[d.chambers[i]].name.toUpperCase(), c.x, c.y - c.ry - 16); }
+  if (n < 4) { const c = SLOTS[n]; g.setLineDash([8, 8]); g.strokeStyle = 'rgba(239,230,210,0.45)'; g.lineWidth = 2; g.beginPath(); g.ellipse(c.x, c.y, c.rx, c.ry, 0, 0, Math.PI * 2); g.stroke(); g.setLineDash([]); g.fillStyle = 'rgba(239,230,210,0.6)'; g.fillText(`DIG HERE: ${DEN_LV[n].cost} MEAT`, c.x, c.y + 4); }
+  // vignette
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  const vg = g.createRadialGradient(W2 / 2, H2 * 0.55, Math.min(W2, H2) * 0.35, W2 / 2, H2 * 0.55, Math.max(W2, H2) * 0.75);
+  vg.addColorStop(0, 'rgba(10,6,3,0)'); vg.addColorStop(1, 'rgba(10,6,3,0.55)');
+  g.fillStyle = vg; g.fillRect(0, 0, W2, H2);
+}
+
+/* ---------- HUD ---------- */
+const $ = id => document.getElementById(id);
+const hud = { hpFill: $('hpFill'), hgFill: $('hgFill'), stFill: $('stFill'), hpNum: $('hpNum'), hgNum: $('hgNum'), stNum: $('stNum') };
+function updHud() {
+  const p = S.p;
+  hud.hpFill.style.transform = `scaleX(${clamp(p.hp, 0, 100) / 100})`;
+  hud.hgFill.style.transform = `scaleX(${p.hunger / 100})`;
+  hud.stFill.style.transform = `scaleX(${p.stam / 100})`;
+  hud.stFill.style.opacity = p.exhausted ? 0.45 : 1;
+  hud.hpNum.textContent = Math.max(0, Math.round(p.hp)); hud.hgNum.textContent = Math.round(p.hunger); hud.stNum.textContent = Math.round(p.stam);
+  $('dayNum').textContent = `Day ${S.day}`; $('phase').textContent = phaseName(S.dayT);
+  const tt = tileAt(p.x, p.y);
+  $('conceal').hidden = !(tt === T.FOREST || tt === T.DENSE);
+  $('carryChip').hidden = p.carry === 0; $('carryChip').textContent = `Carrying ${p.carry} meat`;
+  $('sneakChip').hidden = !p.sneak;
+  const d = S.den;
+  $('dsDen').textContent = d ? DEN_LV[d.level].name : 'None';
+  $('dsFood').textContent = d ? `${d.food} / ${denCap(d)}` : '0';
+  $('dsPups').textContent = d ? d.pups.length : 0;
+  $('dsPack').textContent = S.pack.length ? `${S.pack.length + 1} wolves` : 'Just you';
+  const touchMode = document.body.classList.contains('touch');
+  const kE = touchMode ? 'Act' : 'E', kF = touchMode ? 'Eat' : 'F', kC = touchMode ? 'tap Sneak' : 'press C';
+  let goal;
+  if (!d) goal = p.hunger < 60 ? `Hunt: ${kC} to creep up on a deer, then bite for an ambush.` : `Find a sheltered patch of woods and dig a den (${kE}).`;
+  else if (d.level < BIG_DEN) goal = `Store meat, go inside, and dig chambers. A ${DEN_LV[BIG_DEN].name} is big enough for pups.`;
+  else if (!d.pups.length && !S.pack.length) goal = `Store ${LITTER_COST} meat in your den, then raise a litter inside.`;
+  else if (d.pups.length) goal = `Keep the den stocked. ${d.pups.length} pup${d.pups.length > 1 ? 's' : ''} eat 1 meat each at dawn.`;
+  else if (d.level < 3) goal = 'Dig the last chamber to finish your Great Den.';
+  else goal = 'Grow your pack to 8 and hold the ridge.';
+  $('goalText').textContent = goal;
+  let hint = '';
+  const m = nearestMeat(46);
+  if (m && p.carry < CARRY_CAP) hint = `${kE}: pick up meat   ${kF}: eat it`;
+  else if (d && dist(p, d) < 80) hint = p.carry > 0 ? `${kE}: store ${p.carry} meat in the den` : `${kE}: go inside your den`;
+  else if (!d) hint = (tt === T.GRASS || tt === T.FOREST || tt === T.DENSE || tt === T.MEADOW) ? `${kE}: dig a den here` : '';
+  else if (p.carry > 0) hint = `${kF}: eat carried meat, or bring it home`;
+  $('hint').textContent = hint;
+  const near = d && dist(p, d) < 110;
+  $('denpanel').hidden = !near;
+  if (near) {
+    const pc = pupCap(d);
+    $('dpName').textContent = DEN_LV[d.level].name; $('dpLevel').textContent = `Level ${d.level + 1} of 4`;
+    $('dpFood').textContent = `${d.food} / ${denCap(d)}`; $('dpFill').style.transform = `scaleX(${d.food / denCap(d)})`;
+    $('pupList').textContent = d.pups.length ? 'Pups: ' + d.pups.map(pp => `${pp.name} (${pp.age}/3 days${pp.starve ? ', hungry' : ''})`).join(', ')
+      : pc ? `Room for ${pc} pups. A litter needs ${LITTER_COST} stored meat.` : `Pups need a big den (${DEN_LV[BIG_DEN].name}). Go inside to dig.`;
+    $('btnDenEat').disabled = d.food <= 0;
+  }
+}
+
+/* ---------- modes ---------- */
+function showOnly(id) { for (const k of ['title', 'over', 'pause']) $(k).hidden = k !== id; }
+function startGame(state) {
+  initAudio();
+  S = state; resetRuntime();
+  R.mode = 'play'; showOnly(null); $('hud').hidden = false; $('mapview').hidden = true; $('denview').hidden = true; S.p.inside = false; syncSneakBtn(); document.body.classList.remove('inden');
+  updHud();
+  toast(S.day === 1 && !S.den ? 'Hunt, find a sheltered spot, and dig a den.' : `Welcome back. Day ${S.day}.`);
+  save();
+}
+function gameOver() {
+  S.over = true; R.mode = 'over'; clearSave(); $('denview').hidden = true; document.body.classList.remove('inden'); S.p.inside = false;
+  $('hud').hidden = true;
+  $('overCause').textContent = S.p.cause || 'Lost in the wild';
+  $('oDays').textContent = S.day; $('oKills').textContent = S.stats.kills; $('oPups').textContent = S.stats.pupsRaised; $('oPack').textContent = S.stats.bestPack;
+  $('overNote').textContent = S.pack.length ? `${S.pack.length} wolves of your pack still roam the ridge without you.` : 'No pack carries your line forward this time.';
+  showOnly('over');
+}
+function pause(on) {
+  if (R.mode !== 'play' && R.mode !== 'paused') return;
+  R.mode = on ? 'paused' : 'play';
+  $('pause').hidden = !on;
+  if (on) save();
+}
+function toTitle() {
+  save();
+  R.mode = 'title'; $('hud').hidden = true; $('mapview').hidden = true; $('denview').hidden = true;
+  const sv = loadSave();
+  S = sv ? deserialize(sv) : newState((rand() * 1e9) | 0);
+  resetRuntime();
+  setupTitle(sv);
+  showOnly('title');
+}
+function setupTitle(sv) {
+  $('btnContinue').hidden = !sv;
+  if (sv) $('btnContinue').textContent = `Continue (day ${sv.day})`;
+  $('seedNote').textContent = `World ${S.seed.toString(36).toUpperCase()}`;
+}
+function toggleMap(on) {
+  if (on && R.mode !== 'play') return;
+  $('mapview').hidden = !on;
+  if (on) drawBigMap();
+}
+
+/* ---------- input ---------- */
+window.addEventListener('keydown', e => {
+  const k = e.key.toLowerCase();
+  if (R.mode === 'play' && [' ', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k)) e.preventDefault();
+  if (e.repeat && k !== 'shift') { keys[k] = true; return; }
+  keys[k] = true;
+  if (R.mode === 'play' && S.p.inside) {
+    if (k === 'e' || k === 'escape') leaveDen(); else if (k === 'p') pause(true);
+    return;
+  }
+  if (R.mode === 'play') {
+    if (!$('mapview').hidden) { if (k === 'm' || k === 'escape') toggleMap(false); return; }
+    if (k === ' ') bite();
+    else if (k === 'e') action();
+    else if (k === 'f') eat();
+    else if (k === 'h') howl();
+    else if (k === 'm') toggleMap(true);
+    else if (k === 'p' || k === 'escape') pause(true);
+    else if (k === 'c') toggleSneak();
+    else if (k === '=' || k === '+') R.zoom = clamp(R.zoom + 0.1, 0.75, 1.6);
+    else if (k === '-') R.zoom = clamp(R.zoom - 0.1, 0.75, 1.6);
+  } else if (R.mode === 'paused' && (k === 'p' || k === 'escape')) pause(false);
+});
+window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; if (R.mode === 'play') pause(true); });
+document.addEventListener('visibilitychange', () => { if (document.hidden && R.mode === 'play') pause(true); });
+cv.addEventListener('pointerdown', e => { if (R.mode === 'play' && e.pointerType === 'mouse' && e.button === 0) bite(); });
+cv.addEventListener('wheel', e => { if (R.mode !== 'play') return; e.preventDefault(); R.zoom = clamp(R.zoom * (e.deltaY > 0 ? 0.92 : 1.08), 0.75, 1.6); }, { passive: false });
+const blurBtn = fn => e => { fn(); e.currentTarget.blur(); };
+$('btnNew').addEventListener('click', () => { const had = !!loadSave(); clearSave(); startGame(newState(S && !had ? S.seed : (rand() * 1e9) | 0)); });
+$('btnContinue').addEventListener('click', () => { const sv = loadSave(); if (sv) startGame(deserialize(sv)); });
+$('btnAgain').addEventListener('click', () => { startGame(newState((rand() * 1e9) | 0)); });
+$('btnResume').addEventListener('click', () => pause(false));
+$('btnQuit').addEventListener('click', toTitle);
+$('btnPause').addEventListener('click', blurBtn(() => pause(true)));
+$('btnMap').addEventListener('click', blurBtn(() => toggleMap(true)));
+$('btnCloseMap').addEventListener('click', () => toggleMap(false));
+$('mapview').addEventListener('click', e => { if (e.target.id === 'mapview') toggleMap(false); });
+$('btnSound').addEventListener('click', blurBtn(() => { muted = !muted; $('btnSound').textContent = muted ? 'Muted' : 'Sound'; }));
+$('btnEnter').addEventListener('click', blurBtn(enterDen));
+$('btnDenEat').addEventListener('click', blurBtn(denEat));
+$('denside').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b || !S || !S.den) return;
+  const d = S.den;
+  if (b.dataset.do === 'leave') { leaveDen(); return; }
+  if (b.dataset.do === 'eat') denEat();
+  else if (b.dataset.do === 'litter') raiseLitter();
+  else if (b.dataset.dig) digChamber(b.dataset.dig);
+  else if (b.dataset.style) {
+    const [k, v] = b.dataset.style.split(':');
+    if (k === 'decor') { const i = d.style.decor.indexOf(v); if (i >= 0) d.style.decor.splice(i, 1); else d.style.decor.push(v); }
+    else d.style[k] = v;
+    save();
+  }
+  refreshDenSide(true);
+});
+denCv.addEventListener('pointerdown', e => {
+  if (!S || !S.p.inside || !S.den) return;
+  const r = denCv.getBoundingClientRect();
+  const vx = ((e.clientX - r.left) * DPR - denView.ox) / denView.s, vy = ((e.clientY - r.top) * DPR - denView.oy) / denView.s;
+  for (let i = 0; i < S.den.chambers.length; i++) {
+    const c = SLOTS[i];
+    if (((vx - c.x) / c.rx) ** 2 + ((vy - c.y) / c.ry) ** 2 < 1.3) { R.denWolf.slot = i; R.denWolf.tx = c.x + clamp(vx - c.x, -c.rx * 0.6, c.rx * 0.6); }
+  }
+});
+
+// touch
+const isTouch = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window && navigator.maxTouchPoints > 0;
+if (isTouch) { document.body.classList.add('touch'); $('touch').hidden = false; }
+const stick = $('stick'), knob = $('knob');
+let stickId = null;
+function stickMove(e) {
+  const r = stick.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+  let dx = e.clientX - cx, dy = e.clientY - cy; const max = r.width / 2 - 10, l = Math.hypot(dx, dy);
+  if (l > max) { dx *= max / l; dy *= max / l; }
+  knob.style.transform = `translate(${dx}px,${dy}px)`;
+  touch.jx = dx / max; touch.jy = dy / max;
+}
+stick.addEventListener('pointerdown', e => { stickId = e.pointerId; stick.setPointerCapture(e.pointerId); stickMove(e); e.preventDefault(); });
+stick.addEventListener('pointermove', e => { if (e.pointerId === stickId) stickMove(e); });
+const stickEnd = e => { if (e.pointerId !== stickId) return; stickId = null; touch.jx = touch.jy = 0; knob.style.transform = ''; };
+stick.addEventListener('pointerup', stickEnd); stick.addEventListener('pointercancel', stickEnd);
+document.querySelectorAll('.tbtns button').forEach(b => {
+  const act = b.dataset.act;
+  b.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    if (R.mode !== 'play') return;
+    if (act === 'sprint') { touch.sprint = true; b.classList.add('on'); b.setPointerCapture(e.pointerId); }
+    else if (act === 'bite') bite(); else if (act === 'act') action(); else if (act === 'eat') eat(); else if (act === 'howl') howl(); else if (act === 'sneak') toggleSneak();
+  });
+  if (act === 'sprint') { const off = () => { touch.sprint = false; b.classList.remove('on'); }; b.addEventListener('pointerup', off); b.addEventListener('pointercancel', off); }
+});
+window.addEventListener('resize', resize);
+
+/* ---------- loop ---------- */
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  if (R.mode === 'play' && $('mapview').hidden) {
+    update(dt);
+    const k = 1 - Math.pow(0.0008, dt);
+    R.cam.x += (S.p.x - R.cam.x) * k; R.cam.y += (S.p.y - R.cam.y) * k;
+  } else if (R.mode === 'title' || R.mode === 'over') {
+    R.cam.x += 26 * dt; R.cam.y += 9 * dt;
+    if (S) S.dayT = 0.2;
+  }
+  buildOverview(4);
+  const inside = S && S.p.inside && (R.mode === 'play' || R.mode === 'paused');
+  if (inside) { drawInterior(R.mode === 'play' ? dt : 0); R.denSigT -= dt; if (R.denSigT <= 0) { R.denSigT = 0.4; refreshDenSide(); } }
+  else render();
+  if (R.mode === 'play' && !inside) {
+    R.hudT -= dt; if (R.hudT <= 0) { R.hudT = 0.1; updHud(); }
+    drawMini();
+  }
+  requestAnimationFrame(frame);
+}
+
+/* ---------- boot ---------- */
+function start(data) {
+  resize();
+  const sv = (data && data.save) || loadSave();
+  if (data && data.save) { startGame(deserialize(data.save)); }
+  else {
+    S = sv ? deserialize(sv) : newState((rand() * 1e9) | 0);
+    resetRuntime();
+    R.cam.x = S.p.x - 300; R.cam.y = S.p.y - 120;
+    setupTitle(sv);
+    showOnly('title');
+  }
+  requestAnimationFrame(t => { last = t; frame(t); });
+}
+try { window.claude?.hot?.snapshot?.(() => ({ save: S && R.mode !== 'title' && !S.over ? serialize() : null })); } catch (e) {}
+window.claude?.hot?.ready ? window.claude.hot.ready(start) : start(window.claude?.hot?.data ?? {});
+})();
+</script>
+</body>
+</html>
