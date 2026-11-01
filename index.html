@@ -506,6 +506,7 @@ function pickName(used) {
   const free = NAMES.filter(n => !used.includes(n));
   return (free.length ? free : NAMES)[Math.floor(rand() * (free.length || NAMES.length))];
 }
+function outPack() { return S.pack.filter(w => !w.inside); }
 function usedNames() { return S.pack.map(w => w.name).concat(S.den ? S.den.pups.map(p => p.name) : []); }
 function nightAmt(t) { if (t < 0.06) return 1 - t / 0.06; if (t < 0.55) return 0; if (t < 0.68) return (t - 0.55) / 0.13; return 1; }
 function phaseName(t) { return t < 0.06 ? 'Dawn' : t < 0.25 ? 'Morning' : t < 0.42 ? 'Midday' : t < 0.55 ? 'Afternoon' : t < 0.68 ? 'Dusk' : 'Night'; }
@@ -544,7 +545,7 @@ const sfx = {
 
 /* ---------- state ---------- */
 let S = null;
-const R = { mode:'title', ents:[], meats:[], fx:[], texts:[], rings:[], time:0, spawnT:0, hudT:0, saveT:0, cam:{x:0,y:0}, zoom:1, shake:0, wasNight:false, lastChunk:-1, throttle:{}, gutT:40, preview:null, denSigT:0, denSig:'', denWolf:{ x:370, y:0, tx:370, slot:0, face:1, idle:0, ph:0 } };
+const R = { mode:'title', ents:[], meats:[], fx:[], texts:[], rings:[], time:0, spawnT:0, hudT:0, saveT:0, cam:{x:0,y:0}, zoom:1, shake:0, wasNight:false, lastChunk:-1, throttle:{}, gutT:40, preview:null, denSigT:0, denSig:'', denFollow:[], denWolf:{ x:370, y:0, tx:370, slot:0, face:1, idle:0, ph:0 } };
 const SAVE_KEY = 'ridgepack.save.v1';
 
 function findStart() {
@@ -846,7 +847,9 @@ function dawn() {
     if (pup.age >= 3) {
       if (S.pack.length < MAX_PACK) {
         d.pups.splice(i, 1);
-        S.pack.push(makePackWolf(pup.name, pup.coat, d.x + 20, d.y + 10));
+        const nw = makePackWolf(pup.name, pup.coat, d.x + 20, d.y + 10);
+        S.pack.push(nw);
+        if (S.p.inside) { nw.inside = true; const f = R.denFollow.find(f => f.w === pup); R.denFollow.push({ w: nw, pup: false, x: f ? f.x : SLOTS[0].x, y: f ? f.y : SLOTS[0].y + 30, face: 1, ph: 0, wait: 0, idle: 0 }); }
         S.stats.pupsRaised++;
         toast(`${pup.name} is grown and joins your pack.`, 'good');
       }
@@ -881,7 +884,7 @@ function nightfall() {
 function threatsFor(e) {
   let best = null, bd = 1e9;
   if (!S.p.inside) { best = S.p; bd = dist(e, S.p); }
-  for (const w of S.pack) { const d = dist(e, w); if (d < bd) { bd = d; best = w; } }
+  for (const w of outPack()) { const d = dist(e, w); if (d < bd) { bd = d; best = w; } }
   return { t: best || S.p, d: bd };
 }
 function preyAlarm(e) {
@@ -890,7 +893,7 @@ function preyAlarm(e) {
     const r = sneak ? (e.kind === 'rabbit' ? 30 : 42) : base * (concealMult(p) * 1.1 + 0.2);
     if (dist(e, p) < r) return p;
   }
-  for (const w of S.pack) { const r = sneak && w.task !== 'hunt' ? 40 : base * 0.8; if (dist(e, w) < r) return w; }
+  for (const w of outPack()) { const r = sneak && w.task !== 'hunt' ? 40 : base * 0.8; if (dist(e, w) < r) return w; }
   return null;
 }
 function concealMult(target) {
@@ -937,7 +940,7 @@ function updateBear(e, dt) {
     if (th === S.p) toast('A black bear rears up and huffs. Back away now or it will charge.', 'bad', 'bearwarn', 8);
   }
   const tg = e.target;
-  const alive = !!tg && ((tg === S.p && !S.p.inside) || S.pack.includes(tg));
+  const alive = !!tg && ((tg === S.p && !S.p.inside) || (S.pack.includes(tg) && !tg.inside));
   let spd = 0, dir = e.dir;
   if (e.state === 'warn') {
     const td = alive ? dist(e, tg) : 1e9;
@@ -1022,7 +1025,7 @@ function updateHunter(e, dt) {
     e.detT -= dt;
     if (e.detT <= 0) {
       e.detT = 0.2;
-      const cands = S.p.inside ? [...S.pack] : [S.p, ...S.pack];
+      const cands = S.p.inside ? outPack() : [S.p, ...outPack()];
       let best = null, bd = 1e9;
       for (const c of cands) {
         const d = dist(e, c), range = RANGE * concealMult(c);
@@ -1034,7 +1037,7 @@ function updateHunter(e, dt) {
       if (best) { e.state = 'aim'; e.target = best; e.aimT = 0; if (best === S.p) toast('A hunter has spotted you. Break line of sight!', 'bad', 'spotted', 6); else toast(`A hunter is aiming at ${best.name}!`, 'bad', 'spotpack', 8); }
     }
   } else if (e.state === 'aim' || e.state === 'reload') {
-    const tg = e.target, alive = (tg === S.p && !S.p.inside) || S.pack.includes(tg);
+    const tg = e.target, alive = (tg === S.p && !S.p.inside) || (S.pack.includes(tg) && !tg.inside);
     if (!alive) { e.state = 'wander'; return; }
     const d = dist(e, tg), range = RANGE * concealMult(tg);
     e.face = lerpAng(e.face, Math.atan2(tg.y - e.y, tg.x - e.x), dt * 8);
@@ -1065,6 +1068,7 @@ function updatePack(dt) {
     const w = S.pack[i];
     w.biteCd -= dt; w.hitT -= dt; w.retarget -= dt;
     if (w.hp <= 0) { S.pack.splice(i, 1); blood(w.x, w.y, 14); toast(`${w.name} has fallen.`, 'bad'); continue; }
+    if (w.inside) { if (S.den) { w.x = S.den.x; w.y = S.den.y; } w.hp = Math.min(w.maxhp, w.hp + 4 * dt); continue; }
     if (w.retarget <= 0) {
       w.retarget = 0.35; w.task = 'follow'; w.target = null;
       let bd = 1e9;
@@ -1286,7 +1290,7 @@ function render() {
       ctx.fillStyle = m.life < 30 ? '#6e3a2c' : '#9c2f25'; ellipse(ctx, m.x, m.y, 7.5, 5, m.rot);
       ctx.fillStyle = '#e8d8c4'; ellipse(ctx, m.x + Math.cos(m.rot) * 4, m.y + Math.sin(m.rot) * 4, 3.5, 1.4, m.rot);
     }
-    const list = R.ents.filter(e => inView(e)).concat(S.pack.filter(w => inView(w)));
+    const list = R.ents.filter(e => inView(e)).concat(outPack().filter(w => inView(w)));
     if (!p.inside) list.push(p);
     list.sort((a, b) => a.y - b.y);
     for (const e of list) {
@@ -1314,7 +1318,7 @@ function render() {
     ctx.globalAlpha = 1;
     // pack names
     ctx.font = '500 11px Alegreya Sans, sans-serif';
-    for (const w of S.pack) if (inView(w)) { ctx.fillStyle = 'rgba(239,230,210,0.75)'; ctx.fillText(w.name, w.x, w.y - 20); if (w.hp < w.maxhp) { ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(w.x - 12, w.y - 17, 24, 3); ctx.fillStyle = '#c0392b'; ctx.fillRect(w.x - 12, w.y - 17, 24 * w.hp / w.maxhp, 3); } }
+    for (const w of outPack()) if (inView(w)) { ctx.fillStyle = 'rgba(239,230,210,0.75)'; ctx.fillText(w.name, w.x, w.y - 20); if (w.hp < w.maxhp) { ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(w.x - 12, w.y - 17, 24, 3); ctx.fillStyle = '#c0392b'; ctx.fillRect(w.x - 12, w.y - 17, 24 * w.hp / w.maxhp, 3); } }
   }
   // lighting
   const night = S ? nightAmt(S.dayT) : 0;
@@ -1342,7 +1346,7 @@ function render() {
     const eyes = (e, off, col) => { const a = e.kind === 'hunter' ? e.face : e.ang; const hx = e.x + Math.cos(a) * off, hy = e.y + Math.sin(a) * off, px = -Math.sin(a) * 3.5, py = Math.cos(a) * 3.5; ctx.fillStyle = col; circle(ctx, hx + px, hy + py, 1.6); circle(ctx, hx - px, hy - py, 1.6); };
     ctx.globalAlpha = night;
     for (const e of R.ents) if (inView(e)) { if (e.kind === 'bear' && e.state !== 'sleep') eyes(e, 28, '#f0b640'); else if (e.kind === 'deer') eyes(e, 26, '#d8e8c0'); }
-    for (const w of S.pack) if (inView(w)) eyes(w, 19, '#c8f07a');
+    for (const w of outPack()) if (inView(w)) eyes(w, 19, '#c8f07a');
     ctx.globalAlpha = 1;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
@@ -1414,7 +1418,7 @@ function drawMini() {
     else if (e.kind === 'bear') { dot(e, '#eb2d1e', 3.6); dot(e, '#0a0907', 2.6); }
     else if (e.kind === 'hunter') dot(e, '#ff7a2a', 3);
   }
-  for (const w of S.pack) dot(w, '#bfb8a8', 2);
+  for (const w of outPack()) dot(w, '#bfb8a8', 2);
   if (S.den) { const [x, y] = toM(S.den); const cx = clamp(x, 6, sz - 6), cy = clamp(y, 6, sz - 6); g.fillStyle = '#efe6d2'; g.fillRect(cx - 3.5 * DPR, cy - 3.5 * DPR, 7 * DPR, 7 * DPR); g.fillStyle = '#3a2a18'; g.fillRect(cx - 1.5 * DPR, cy - 1.5 * DPR, 3 * DPR, 3 * DPR); }
   g.save(); g.translate(sz / 2, sz / 2); g.rotate(p.ang); g.fillStyle = '#fff'; g.beginPath(); g.moveTo(6 * DPR, 0); g.lineTo(-4 * DPR, -4 * DPR); g.lineTo(-4 * DPR, 4 * DPR); g.closePath(); g.fill(); g.restore();
   g.fillStyle = 'rgba(239,230,210,0.8)'; g.font = `700 ${10 * DPR}px Alegreya Sans, sans-serif`; g.textAlign = 'center'; g.fillText('N', sz / 2, 11 * DPR);
@@ -1480,13 +1484,23 @@ let denView = { s: 1, ox: 0, oy: 0 };
 function enterDen() {
   const p = S.p, d = S.den; if (!d || dist(p, d) > 90) return;
   p.inside = true; p.sneak = false; syncSneakBtn(); p.x = d.x; p.y = d.y; p.vx = p.vy = 0;
-  R.denWolf = { x: SLOTS[0].x, y: SLOTS[0].y + SLOTS[0].ry * 0.55, tx: SLOTS[0].x, slot: 0, face: 1, idle: 0, ph: 0 };
+  R.denWolf = { x: ENTRANCE_X, y: SURFACE + 24, tx: SLOTS[0].x, slot: 0, face: 1, idle: 0, ph: 0 };
+  // pack wolves close by come in behind you; pups run up from where they were sleeping
+  const comers = S.pack.filter(w => dist(w, d) < 700);
+  comers.forEach(w => { w.inside = true; w.task = 'follow'; w.target = null; });
+  const nurseI = d.chambers.indexOf('nursery'), nc = SLOTS[nurseI >= 0 ? nurseI : 0];
+  R.denFollow = comers.map((w, i) => ({ w, pup: false, x: ENTRANCE_X - 6, y: SURFACE + 24, face: 1, ph: rand() * 6, wait: 0.5 + i * 0.4, idle: 0 }))
+    .concat(d.pups.map((pup, j) => ({ w: pup, pup: true, x: nc.x - nc.rx * 0.4 + j * 22, y: nc.y + nc.ry * 0.58, face: -1, ph: rand() * 6, wait: 0.3 + j * 0.15, idle: 0 })));
+  const names = R.denFollow.map(f => f.w.name);
+  if (names.length) toast(`${names.length > 1 ? names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1] : names[0]} ${names.length > 1 ? 'follow' : 'follows'} you inside.`, 'good', 'follow', 4);
   $('denview').hidden = false; $('mapview').hidden = true; document.body.classList.add('inden');
   refreshDenSide(true);
 }
 function leaveDen() {
   if (!S.p.inside) return;
   S.p.inside = false; S.p.y += 36; S.p.ang = Math.PI / 2;
+  S.pack.filter(w => w.inside).forEach((w, i) => { w.inside = false; w.x = S.p.x + (i % 2 ? 1 : -1) * (30 + i * 12); w.y = S.p.y + 20 + (i % 3) * 10; w.ang = Math.PI / 2; w.retarget = 0.5; });
+  R.denFollow = [];
   $('denview').hidden = true; document.body.classList.remove('inden'); save();
 }
 function denSig() {
@@ -1659,24 +1673,38 @@ function drawInterior(dt) {
   // pantry meat
   const pantryI = d.chambers.indexOf('pantry'), mc = SLOTS[pantryI >= 0 ? pantryI : 0];
   for (let k = 0; k < Math.min(d.food, 18); k++) { const col = k % 6, row = Math.floor(k / 6); const x = mc.x - mc.rx * 0.62 + col * 13 + row * 6, y = mc.y + mc.ry * 0.5 - row * 8; g.fillStyle = '#8e2b22'; ellipse(g, x, y, 7, 4.5, 0.2); g.fillStyle = '#e8d8c4'; ellipse(g, x + 4, y + 1, 2.5, 1); }
-  // pups
-  const nurseI = d.chambers.indexOf('nursery'), pcC = SLOTS[nurseI >= 0 ? nurseI : 0];
-  d.pups.forEach((pup, j) => {
-    pup.ph = (pup.ph || 0) + dt;
-    const sleep = Math.sin(pup.ph * 0.35 + j * 2) > 0.25;
-    const bx = pcC.x - pcC.rx * 0.2 + (j + 0.5) / d.pups.length * pcC.rx * 0.8;
-    const off = sleep ? 0 : Math.sin(pup.ph * 0.9 + j) * 24, face = Math.cos(pup.ph * 0.9 + j) >= 0 ? 1 : -1;
-    drawWolfSide(g, bx + off, pcC.y + pcC.ry * 0.58, 0.42 + pup.age * 0.08, pup.coat, pup.ph, sleep ? 'sleep' : 'walk', face);
-  });
-  // you
+  // you, then the wolves that came in with you, trailing behind
   const dw = R.denWolf, tc = SLOTS[Math.min(dw.slot, n - 1)], ty = tc.y + tc.ry * 0.56;
   if (!isFinite(dw.y)) dw.y = ty;
   const dx = dw.tx - dw.x, dy = ty - dw.y, dl = Math.hypot(dx, dy);
   let pose = 'stand';
-  if (dl > 3) { const step = Math.min(dl, 240 * dt); dw.x += dx / dl * step; dw.y += dy / dl * step; if (Math.abs(dx) > 1) dw.face = dx > 0 ? 1 : -1; pose = 'walk'; dw.idle = 0; }
+  if (dl > 3) { const step = Math.min(dl, 220 * dt); dw.x += dx / dl * step; dw.y += dy / dl * step; if (Math.abs(dx) > 1) dw.face = dx > 0 ? 1 : -1; pose = 'walk'; dw.idle = 0; }
   else { dw.idle += dt; if (dw.idle > 3) pose = 'sleep'; }
   dw.ph += dt;
-  drawWolfSide(g, dw.x, dw.y, 1, '#9a958a', dw.ph, pose, dw.face);
+  const sprites = [{ y: dw.y, draw: () => drawWolfSide(g, dw.x, dw.y, 1, '#9a958a', dw.ph, pose, dw.face) }];
+  const fol = (R.denFollow || []).filter(f => f.pup ? d.pups.includes(f.w) : S.pack.includes(f.w));
+  R.denFollow = fol;
+  const lo = tc.x - tc.rx * 0.78, hi = tc.x + tc.rx * 0.78;
+  fol.forEach((f, i) => {
+    const side = i % 2 ? 1 : -1, gap = (f.pup ? 26 : 44) + Math.floor(i / 2) * (f.pup ? 20 : 30);
+    const restful = dw.idle > 3;
+    let tx = clamp(dw.tx - dw.face * 10 + side * gap, lo, hi);
+    if (f.pup && !restful && pose !== 'walk') tx = clamp(tx + Math.sin(t * 0.9 + i * 1.7) * 14, lo, hi);
+    const fy = ty + ((i % 3) - 1) * 6 + (f.pup ? 3 : 0);
+    f.ph += dt;
+    let fpose = 'stand';
+    if (f.wait > 0) f.wait -= dt;
+    else {
+      const ex = tx - f.x, ey = fy - f.y, el = Math.hypot(ex, ey), spd = f.pup ? 150 + (f.w.age || 0) * 25 : 210;
+      if (el > 3) { const step = Math.min(el, spd * dt); f.x += ex / el * step; f.y += ey / el * step; if (Math.abs(ex) > 1) f.face = ex > 0 ? 1 : -1; fpose = 'walk'; f.idle = 0; }
+      else { f.idle += dt; f.face = dw.x >= f.x ? 1 : -1; if (restful && f.idle > 0.6) fpose = 'sleep'; }
+    }
+    const sc = f.pup ? 0.42 + (f.w.age || 0) * 0.08 : 0.88;
+    sprites.push({ y: f.y, draw: () => drawWolfSide(g, f.x, f.y, sc, f.w.coat, f.ph, fpose, f.face) });
+  });
+  sprites.sort((a, b) => a.y - b.y).forEach(sp => sp.draw());
+  // pups born while you are inside join the followers
+  for (const pup of d.pups) if (!fol.some(f => f.w === pup)) { const nI = d.chambers.indexOf('nursery'), nc = SLOTS[nI >= 0 ? nI : 0]; fol.push({ w: pup, pup: true, x: nc.x, y: nc.y + nc.ry * 0.58, face: -1, ph: rand() * 6, wait: 0.6, idle: 0 }); }
   // glow mushrooms
   if (dec.includes('glow')) {
     for (let i = 0; i < n; i++) { const c = SLOTS[i]; for (let k = 0; k < 4; k++) {
@@ -1752,7 +1780,7 @@ function showOnly(id) { for (const k of ['title', 'over', 'pause']) $(k).hidden 
 function startGame(state) {
   initAudio();
   S = state; resetRuntime();
-  R.mode = 'play'; showOnly(null); $('hud').hidden = false; $('mapview').hidden = true; $('denview').hidden = true; S.p.inside = false; syncSneakBtn(); document.body.classList.remove('inden');
+  R.mode = 'play'; showOnly(null); $('hud').hidden = false; $('mapview').hidden = true; $('denview').hidden = true; S.p.inside = false; S.pack.forEach(w => w.inside = false); R.denFollow = []; syncSneakBtn(); document.body.classList.remove('inden');
   updHud();
   toast(S.day === 1 && !S.den ? 'Hunt, find a sheltered spot, and dig a den.' : `Welcome back. Day ${S.day}.`);
   save();
